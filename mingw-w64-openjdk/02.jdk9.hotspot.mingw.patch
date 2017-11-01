@@ -1,0 +1,605 @@
+diff -r b756e7a2ec33 make/gensrc/GensrcAdlc.gmk
+--- a/make/gensrc/GensrcAdlc.gmk	Thu Aug 03 18:56:57 2017 +0000
++++ b/make/gensrc/GensrcAdlc.gmk	Fri Oct 27 19:28:15 2017 +0200
+@@ -44,11 +44,15 @@
+     ADLC_LDFLAGS := -q64
+     ADLC_CFLAGS := -qnortti -qeh -q64 -DAIX
+   else ifeq ($(OPENJDK_BUILD_OS), windows)
+-    ADLC_LDFLAGS := -nologo
+-    ADLC_CFLAGS := -nologo -EHsc
+-    # NOTE: The old build also have -D_CRT_SECURE_NO_DEPRECATE but it doesn't
+-    # seem needed any more.
+-    ADLC_CFLAGS_WARNINGS := -W3 -D_CRT_SECURE_NO_WARNINGS
++    ifeq ($(TOOLCHAIN_TYPE), gcc)
++      ADLC_CFLAGS := -fno-exceptions
++    else
++      ADLC_LDFLAGS := -nologo
++      ADLC_CFLAGS := -nologo -EHsc
++      # NOTE: The old build also have -D_CRT_SECURE_NO_DEPRECATE but it doesn't
++      # seem needed any more.
++      ADLC_CFLAGS_WARNINGS := -W3 -D_CRT_SECURE_NO_WARNINGS
++    endif
+   endif
+ 
+   # Set the C++ standard if supported
+diff -r b756e7a2ec33 make/lib/CompileGtest.gmk
+--- a/make/lib/CompileGtest.gmk	Thu Aug 03 18:56:57 2017 +0000
++++ b/make/lib/CompileGtest.gmk	Fri Oct 27 19:28:15 2017 +0200
+@@ -52,6 +52,13 @@
+ 	$(call create-mapfile)
+ endif
+ 
++
++ifeq ($(OPENJDK_TARGET_OS)-$(TOOLCHAIN_TYPE), windows-microsoft)
++    GTEST_JVM_CFLAGS_windows :=-EHsc
++else
++    GTEST_JVM_CFLAGS_windows :=
++endif
++
+ # Disabling switch warning for clang because of test source.
+ 
+ # Note: On AIX, the gtest test classes linked into the libjvm.so push the TOC
+@@ -76,7 +83,7 @@
+     CFLAGS := $(JVM_CFLAGS) -I$(GTEST_FRAMEWORK_SRC) \
+         -I$(GTEST_FRAMEWORK_SRC)/include \
+         $(addprefix -I,$(GTEST_TEST_SRC)), \
+-    CFLAGS_windows := -EHsc, \
++    CFLAGS_windows := $(GTEST_JVM_CFLAGS_windows), \
+     CFLAGS_solaris := -DGTEST_HAS_EXCEPTIONS=0 -library=stlport4, \
+     CFLAGS_macosx := -DGTEST_OS_MAC=1, \
+     CFLAGS_aix := -qpic=large, \
+@@ -114,12 +121,12 @@
+         -I$(GTEST_FRAMEWORK_SRC)/include, \
+     CFLAGS_DEBUG_SYMBOLS := $(JVM_CFLAGS_SYMBOLS), \
+     CXXFLAGS_DEBUG_SYMBOLS := $(JVM_CFLAGS_SYMBOLS), \
+-    LDFLAGS := $(LDFLAGS_JDKEXE), \
++    LDFLAGS := $(LDFLAGS_JDKEXE) -L$(JVM_OUTPUTDIR)/gtest, \
+     LDFLAGS_unix := -L$(JVM_OUTPUTDIR)/gtest $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_solaris := -library=stlport4, \
+     LIBS_linux := $(LIBCXX), \
+     LIBS_unix := -ljvm, \
+-    LIBS_windows := $(JVM_OUTPUTDIR)/gtest/objs/jvm.lib, \
++    LIBS_windows := jvm.lib, \
+     COPY_DEBUG_SYMBOLS := $(GTEST_COPY_DEBUG_SYMBOLS), \
+     ZIP_EXTERNAL_DEBUG_SYMBOLS := false, \
+ ))
+diff -r b756e7a2ec33 make/lib/CompileJvm.gmk
+--- a/make/lib/CompileJvm.gmk	Thu Aug 03 18:56:57 2017 +0000
++++ b/make/lib/CompileJvm.gmk	Fri Oct 27 19:28:15 2017 +0200
+@@ -189,9 +189,9 @@
+ 
+ ifeq ($(OPENJDK_TARGET_OS), windows)
+   ifeq ($(OPENJDK_TARGET_CPU_BITS), 64)
+-    RC_DESC := 64-Bit$(SPACE)
++    RC_DESC := 64-Bit
+   endif
+-  JVM_RCFLAGS += -D"HS_FILEDESC=$(HOTSPOT_VM_DISTRO) $(RC_DESC)$(JVM_VARIANT) VM"
++  JVM_RCFLAGS += -D"HS_FILEDESC=$(HOTSPOT_VM_DISTRO)\x20$(RC_DESC)\x20$(JVM_VARIANT)\x20VM"
+ endif
+ 
+ JVM_OPTIMIZATION ?= HIGHEST_JVM
+diff -r b756e7a2ec33 make/lib/JvmMapfile.gmk
+--- a/make/lib/JvmMapfile.gmk	Thu Aug 03 18:56:57 2017 +0000
++++ b/make/lib/JvmMapfile.gmk	Fri Oct 27 19:28:15 2017 +0200
+@@ -124,12 +124,21 @@
+        }'
+ 
+ else ifeq ($(OPENJDK_TARGET_OS), windows)
+-  DUMP_SYMBOLS_CMD := $(DUMPBIN) -symbols *.obj
+-  FILTER_SYMBOLS_AWK_SCRIPT := \
+-      '{ \
+-        if ($$7 ~ /??_7.*@@6B@/ && $$7 !~ /type_info/) print $$7; \
+-      }'
+-
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    DUMP_SYMBOLS_CMD := $(DUMPBIN) -symbols *.obj
++    FILTER_SYMBOLS_AWK_SCRIPT := \
++        '{ \
++          if ($$7 ~ /??_7.*@@6B@/ && $$7 !~ /type_info/) print $$7; \
++        }'
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    DUMP_SYMBOLS_CMD := $(NM) --defined-only *.obj
++    ifneq ($(FILTER_SYMBOLS_PATTERN), )
++      FILTER_SYMBOLS_PATTERN := $(FILTER_SYMBOLS_PATTERN)|
++    endif
++    FILTER_SYMBOLS_PATTERN := $(FILTER_SYMBOLS_PATTERN)^_ZTV|^gHotSpotVM|^UseSharedSpaces$$
++    FILTER_SYMBOLS_PATTERN := $(FILTER_SYMBOLS_PATTERN)|^_ZN9Arguments17SharedArchivePathE$$
++    FILTER_SYMBOLS_AWK_SCRIPT := '{ if ($$3 ~ /$(FILTER_SYMBOLS_PATTERN)/) print $$3; }'
++  endif
+ else
+   $(error Unknown target OS $(OPENJDK_TARGET_OS) in JvmMapfile.gmk)
+ endif
+@@ -140,6 +149,7 @@
+ $(JVM_OUTPUTDIR)/symbols-objects: $(BUILD_LIBJVM_ALL_OBJS)
+ 	$(call LogInfo, Generating symbol list from object files)
+ 	$(CD) $(JVM_OUTPUTDIR)/objs && \
++  echo "HELLO: $(NAWK) $(FILTER_SYMBOLS_AWK_SCRIPT)" \
+ 	  $(DUMP_SYMBOLS_CMD) | $(NAWK) $(FILTER_SYMBOLS_AWK_SCRIPT) | $(SORT) -u > $@
+ 
+ SYMBOLS_SRC += $(JVM_OUTPUTDIR)/symbols-objects
+diff -r b756e7a2ec33 make/lib/Lib-jdk.hotspot.agent.gmk
+--- a/make/lib/Lib-jdk.hotspot.agent.gmk	Thu Aug 03 18:56:57 2017 +0000
++++ b/make/lib/Lib-jdk.hotspot.agent.gmk	Fri Oct 27 19:28:15 2017 +0200
+@@ -78,21 +78,26 @@
+ 
+ else ifeq ($(OPENJDK_TARGET_OS), windows)
+   SA_NAME := sawindbg
+-  COMMON_CFLAGS := -D_WINDOWS -D_DEBUG -D_CONSOLE -D_MBCS -EHsc -FD
++  COMMON_CFLAGS := -D_WINDOWS -D_DEBUG -D_CONSOLE -D_MBCS
++  SA_LDFLAGS := $(LDFLAGS_JDKLIB)
++  SA_LIBS := dbgeng.lib
++  ifeq ($(TOOLCHAIN_TYPE), windows)
++    COMMON_CFLAGS += -EHsc -FD
++    SA_LDFLAGS += $(SA_MACHINE_FLAG_windows) -manifest \
++      -subsystem:console -map
++    ifeq ($(OPENJDK_TARGET_CPU), x86_64)
++      SA_CXXFLAGS += -DWIN64
++    else
++      SA_CXXFLAGS += -RTC1
++      SA_LDFLAGS += -SAFESEH
++    endif
++  else
++    SA_TOOLCHAIN := TOOLCHAIN_LINK_CXX
++  endif
+   SA_CFLAGS := $(subst -DWIN32_LEAN_AND_MEAN,, $(CFLAGS_JDKLIB)) \
+       $(COMMON_CFLAGS)
+   SA_CXXFLAGS := $(subst -DWIN32_LEAN_AND_MEAN,, $(CXXFLAGS_JDKLIB)) \
+       $(COMMON_CFLAGS)
+-  SA_LDFLAGS := $(LDFLAGS_JDKLIB) \
+-      $(SA_MACHINE_FLAG_windows) -manifest \
+-      -subsystem:console -map
+-  SA_LIBS := dbgeng.lib
+-  ifeq ($(OPENJDK_TARGET_CPU), x86_64)
+-    SA_CXXFLAGS += -DWIN64
+-  else
+-    SA_CXXFLAGS += -RTC1
+-    SA_LDFLAGS += -SAFESEH
+-  endif
+ endif
+ 
+ ################################################################################
+@@ -110,7 +115,7 @@
+     CFLAGS := $(SA_INCLUDES) $(SA_CFLAGS) $(SA_CUSTOM_CFLAGS), \
+     CXXFLAGS := $(SA_INCLUDES) $(SA_CXXFLAGS) $(SA_CUSTOM_CXXFLAGS), \
+     LDFLAGS := $(SA_LDFLAGS) $(SA_CUSTOM_LDFLAGS), \
+-    LIBS := $(SA_LIBS), \
++    LIBS_windows := $(SA_LIBS), \
+     MAPFILE := $(SA_MAPFILE), \
+     OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libsa, \
+ ))
+diff -r b756e7a2ec33 make/test/GtestImage.gmk
+--- a/make/test/GtestImage.gmk	Thu Aug 03 18:56:57 2017 +0000
++++ b/make/test/GtestImage.gmk	Fri Oct 27 19:28:15 2017 +0200
+@@ -37,7 +37,7 @@
+   $(eval TARGETS += $$(COPY_GTEST_$v)) \
+ )
+ 
+-ifeq ($(OPENJDK_TARGET_OS), windows)
++ifeq ($(OPENJDK_TOOLCHAIN_TYPE), microsoft)
+   $(foreach v, $(JVM_VARIANTS), \
+     $(eval $(call SetupCopyFiles, COPY_GTEST_MSVCR_$v, \
+         DEST := $(TEST_IMAGE_DIR)/hotspot/gtest/$v, \
+diff -r b756e7a2ec33 src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp
+--- a/src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -48,9 +48,20 @@
+ #endif
+ 
+ #define DEBUG_NO_IMPLEMENTATION
++
+ #include <dbgeng.h>
+ #include <dbghelp.h>
+ 
++#if !defined (_MSC_VER)
++// MINGW does not defines these properly in the headers, so has to be done here
++__CRT_UUID_DECL(IDebugClient,0x27fe5639,0x8407,0x4f47,0x83,0x64,0xee,0x11,0x8f,0xb0,0x8a,0xc8);
++__CRT_UUID_DECL(IDebugControl,0x5182e668,0x105e,0x416e,0xad,0x92,0x24,0xef,0x80,0x04,0x24,0xba);
++__CRT_UUID_DECL(IDebugOutputCallbacks,0x4bf58045,0xd654,0x4c40,0xb0,0xaf,0x68,0x30,0x90,0xf3,0x56,0xdc);
++__CRT_UUID_DECL(IDebugDataSpaces,0x88f7dfab,0x3ea7,0x4c3a,0xae,0xfb,0xc4,0xe8,0x10,0x61,0x73,0xaa);
++__CRT_UUID_DECL(IDebugAdvanced,0xf2df5f53,0x071f,0x47bd,0x9d,0xe6,0x57,0x34,0xc3,0xfe,0xd6,0x89);
++__CRT_UUID_DECL(IDebugSymbols,0x8c31e98c,0x983a,0x48a5,0x90,0x16,0x6f,0xe5,0xd6,0x67,0xa9,0x50);
++__CRT_UUID_DECL(IDebugSystemObjects,0x6b86fe2c,0x2c4f,0x4f0c,0x9d,0xa2,0x17,0x43,0x11,0xac,0xc3,0x27);
++#endif
+ // simple template to manage array delete across early (error) returns
+ 
+ template <class T>
+diff -r b756e7a2ec33 src/os/windows/vm/attachListener_windows.cpp
+--- a/src/os/windows/vm/attachListener_windows.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os/windows/vm/attachListener_windows.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -148,13 +148,13 @@
+   void set_next(Win32AttachOperation* next)             { _next = next; }
+ 
+   // noarg constructor as operation is preallocated
+-  Win32AttachOperation() : AttachOperation("<noname>") {
++  Win32AttachOperation() : AttachOperation((char*)"<noname>") {
+     set_pipe("<nopipe>");
+     set_next(NULL);
+   }
+ 
+  public:
+-  void Win32AttachOperation::complete(jint result, bufferedStream* result_stream);
++  void complete(jint result, bufferedStream* result_stream);
+ };
+ 
+ 
+diff -r b756e7a2ec33 src/os/windows/vm/interfaceSupport_windows.hpp
+--- a/src/os/windows/vm/interfaceSupport_windows.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os/windows/vm/interfaceSupport_windows.hpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -36,11 +36,15 @@
+   // __try/__except are very lightweight operations (only several
+   // instructions not affecting control flow directly on x86)
+   // so we can use it here, on very time critical path
++  #if defined(_WIN32) && !defined(__MINGW32__)
+   __try {
++  #endif
+     os::write_memory_serialize_page(thread);
++  #if defined(_WIN32) && !defined(__MINGW32__)
+   } __except (os::win32::
+               serialize_fault_filter((_EXCEPTION_POINTERS*)_exception_info()))
+     {}
++  #endif
+ }
+ 
+ #endif // OS_WINDOWS_VM_INTERFACESUPPORT_WINDOWS_HPP
+diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
+--- a/src/os/windows/vm/os_windows.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os/windows/vm/os_windows.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -124,6 +124,9 @@
+   #endif
+ #endif
+ 
++#if defined(__MINGW32__)
++LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
++#endif
+ // save DLL module handle, used by GetModuleFileName
+ 
+ HINSTANCE vm_lib_handle;
+@@ -186,7 +189,7 @@
+     char *home_path;
+     char *dll_path;
+     char *pslash;
+-    char *bin = "\\bin";
++    const char *bin = "\\bin";
+     char home_dir[MAX_PATH + 1];
+     char *alt_home_dir = ::getenv("_ALT_JAVA_HOME_DIR");
+ 
+@@ -298,6 +301,8 @@
+ #ifndef _WIN64
+   // set our UnhandledExceptionFilter and save any previous one
+   prev_uef_handler = SetUnhandledExceptionFilter(Handle_FLT_Exception);
++#elif defined (__MINGW32__)
++  prev_uef_handler = SetUnhandledExceptionFilter(topLevelExceptionFilter);
+ #endif
+ 
+   // Done
+@@ -415,7 +420,7 @@
+ LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
+ 
+ // Thread start routine for all newly created threads
+-static unsigned __stdcall thread_native_entry(Thread* thread) {
++unsigned __stdcall thread_native_entry(Thread* thread) {
+   // Try to randomize the cache line index of hot stack frames.
+   // This helps when threads of the same stack traces evict each other's
+   // cache lines. The threads can be either from the same JVM instance, or
+@@ -448,12 +453,17 @@
+   // Install a win32 structured exception handler around every thread created
+   // by VM, so VM can generate error dump when an exception occurred in non-
+   // Java thread (e.g. VM thread).
++  #if !defined(__MINGW32__)
+   __try {
++  #endif
+     thread->run();
++  #if !defined(__MINGW32__)
+   } __except(topLevelExceptionFilter(
+                                      (_EXCEPTION_POINTERS*)_exception_info())) {
+     // Nothing to do.
+   }
++  #endif
++  
+ 
+   log_info(os, thread)("Thread finished (tid: " UINTX_FORMAT ").", os::current_thread_id());
+ 
+@@ -796,9 +806,13 @@
+   info.dwThreadID = -1;
+   info.dwFlags = 0;
+ 
++#if !defined (__MINGW32__)
+   __try {
++#endif //__MINGW32__
+     RaiseException (MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(DWORD), (const ULONG_PTR*)&info );
++#if !defined (__MINGW32__)
+   } __except(EXCEPTION_EXECUTE_HANDLER) {}
++#endif //__MINGW32__  
+ }
+ 
+ bool os::distribute_processes(uint length, uint* distribution) {
+@@ -2235,7 +2249,7 @@
+ 
+ #define def_excpt(val) { #val, (val) }
+ 
+-static const struct { char* name; uint number; } exceptlabels[] = {
++static const struct { const char* name; uint number; } exceptlabels[] = {
+     def_excpt(EXCEPTION_ACCESS_VIOLATION),
+     def_excpt(EXCEPTION_DATATYPE_MISALIGNMENT),
+     def_excpt(EXCEPTION_BREAKPOINT),
+@@ -2770,13 +2784,17 @@
+   Return JNICALL jni_fast_Get##Result##Field_wrapper(JNIEnv *env,           \
+                                                      jobject obj,           \
+                                                      jfieldID fieldID) {    \
++#if defined(_WIN32) && !defined(__MINGW32__)
+     __try {                                                                 \
++#endif
+       return (*JNI_FastGetField::jni_fast_Get##Result##Field_fp)(env,       \
+                                                                  obj,       \
+                                                                  fieldID);  \
++#if defined(_WIN32) && !defined(__MINGW32__)                                                                 
+     } __except(fastJNIAccessorExceptionFilter((_EXCEPTION_POINTERS*)        \
+                                               _exception_info())) {         \
+     }                                                                       \
++#endif
+     return 0;                                                               \
+   }
+ 
+@@ -4679,8 +4697,12 @@
+ static int nonSeekAvailable(int, long *);
+ static int stdinAvailable(int, long *);
+ 
++#if !defined(S_ISCHR)
+ #define S_ISCHR(mode)   (((mode) & _S_IFCHR) == _S_IFCHR)
++#endif // S_ISCHR
++#if !defined(S_ISFIFO)
+ #define S_ISFIFO(mode)  (((mode) & _S_IFIFO) == _S_IFIFO)
++#endif // S_ISFIFO
+ 
+ // This code is a copy of JDK's sysAvailable
+ // from src/windows/hpi/src/sys_api_md.c
+@@ -4999,13 +5021,17 @@
+          "crash_protection already set?");
+ 
+   bool success = true;
++  #if !defined(__MINGW32__)
+   __try {
++  #endif
+     WatcherThread::watcher_thread()->set_crash_protection(this);
+     cb.call();
++  #if !defined(__MINGW32__)
+   } __except(EXCEPTION_EXECUTE_HANDLER) {
+     // only for protection, nothing to do
+     success = false;
+   }
++  #endif
+   WatcherThread::watcher_thread()->set_crash_protection(NULL);
+   return success;
+ }
+@@ -5605,7 +5631,7 @@
+ */
+ int os::get_signal_number(const char* name) {
+   static const struct {
+-    char* name;
++    const char* name;
+     int   number;
+   } siglabels [] =
+     // derived from version 6.0 VC98/include/signal.h
+diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/os_windows_x86.cpp
+--- a/src/os_cpu/windows_x86/vm/os_windows_x86.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os_cpu/windows_x86/vm/os_windows_x86.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -72,7 +72,9 @@
+ 
+ // Install a win32 structured exception handler around thread.
+ void os::os_exception_wrapper(java_call_t f, JavaValue* value, const methodHandle& method, JavaCallArguments* args, Thread* thread) {
++#if defined(_WIN32) && !defined(__MINGW32__)
+   __try {
++#endif
+ 
+ #ifndef AMD64
+     // We store the current thread in this wrapperthread location
+@@ -112,9 +114,11 @@
+ #endif // !AMD64
+ 
+     f(value, method, args, thread);
++#if defined(_WIN32) && !defined(__MINGW32__)
+   } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
+       // Nothing to do.
+   }
++#endif
+ }
+ 
+ #ifdef AMD64
+diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp
+--- a/src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -29,7 +29,7 @@
+ #ifdef AMD64
+ typedef unsigned char UBYTE;
+ 
+-#if _MSC_VER < 1700
++#if defined(_MSC_VER) && _MSC_VER < 1700
+ 
+ /* Not needed for VS2012 compiler, comes from winnt.h. */
+ #define UNW_FLAG_EHANDLER  0x01
+@@ -64,7 +64,7 @@
+ } RUNTIME_FUNCTION, *PRUNTIME_FUNCTION;
+ */
+ 
+-#if _MSC_VER < 1700
++#if defined(_MSC_VER) && _MSC_VER < 1700
+ 
+ /* Not needed for VS2012 compiler, comes from winnt.h. */
+ typedef struct _DISPATCHER_CONTEXT {
+@@ -81,7 +81,7 @@
+ 
+ #endif
+ 
+-#if _MSC_VER < 1500
++#if defined(_MSC_VER) && _MSC_VER < 1500
+ 
+ /* Not needed for VS2008 compiler, comes from winnt.h. */
+ typedef EXCEPTION_DISPOSITION (*PEXCEPTION_ROUTINE) (
+diff -r b756e7a2ec33 src/share/vm/compiler/methodMatcher.cpp
+--- a/src/share/vm/compiler/methodMatcher.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/share/vm/compiler/methodMatcher.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -96,7 +96,7 @@
+   bool have_colon = (colon != NULL);
+   if (have_colon) {
+     // Don't allow multiple '::'
+-    if (colon + 2 != '\0') {
++    if (*(colon + 2) != '\0') {
+       if (strstr(colon+2, "::")) {
+         error_msg = "Method pattern only allows one '::' allowed";
+         return false;
+diff -r b756e7a2ec33 src/share/vm/prims/jni.cpp
+--- a/src/share/vm/prims/jni.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/share/vm/prims/jni.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -4026,11 +4026,11 @@
+ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_CreateJavaVM(JavaVM **vm, void **penv, void *args) {
+   jint result = 0;
+   // On Windows, let CreateJavaVM run with SEH protection
+-#ifdef _WIN32
++#if defined(_WIN32) && !defined(__MINGW32__)
+   __try {
+ #endif
+     result = JNI_CreateJavaVM_inner(vm, penv, args);
+-#ifdef _WIN32
++#if defined(_WIN32) && !defined(__MINGW32__)
+   } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
+     // Nothing to do.
+   }
+diff -r b756e7a2ec33 src/share/vm/utilities/globalDefinitions_gcc.hpp
+--- a/src/share/vm/utilities/globalDefinitions_gcc.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/share/vm/utilities/globalDefinitions_gcc.hpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -84,6 +84,12 @@
+ #include <sys/time.h>
+ #endif // LINUX || _ALLBSD_SOURCE
+ 
++#if defined(WIN32)
++#define __STDC_LIMIT_MACROS 1
++#include <stdint.h>
++#include <inttypes.h>
++#endif // WIN32
++
+ // 4810578: varargs unsafe on 32-bit integer/64-bit pointer architectures
+ // When __cplusplus is defined, NULL is defined as 0 (32-bit constant) in
+ // system header files.  On 32-bit architectures, there is no problem.
+@@ -112,23 +118,19 @@
+   #endif
+ #endif
+ 
+-// NULL vs NULL_WORD:
+-// On Linux NULL is defined as a special type '__null'. Assigning __null to
+-// integer variable will cause gcc warning. Use NULL_WORD in places where a
+-// pointer is stored as integer value.  On some platforms, sizeof(intptr_t) >
+-// sizeof(void*), so here we want something which is integer type, but has the
+-// same size as a pointer.
+-#ifdef __GNUC__
++// 64-bit Windows uses a P64 data model (not LP64, although we define _LP64)
++// Since longs are 32-bit we cannot use 0L here.  Use 64-bit integer-suffix (LL) 
++// instead.
++#ifdef _WIN32
+   #ifdef _LP64
+-    #define NULL_WORD  0L
++    #undef NULL
++    #define NULL 0LL
+   #else
+-    // Cast 0 to intptr_t rather than int32_t since they are not the same type
+-    // on platforms such as Mac OS X.
+-    #define NULL_WORD  ((intptr_t)0)
++    #ifndef NULL
++      #define NULL 0
++    #endif
+   #endif
+-#else
+-  #define NULL_WORD  NULL
+-#endif
++#endif // _WIN32
+ 
+ #if !defined(LINUX) && !defined(_ALLBSD_SOURCE)
+ // Compiler-specific primitive types
+@@ -144,14 +146,38 @@
+ typedef unsigned long long uint64_t;
+ #endif // _UINT64_T
+ // %%%% how to access definition of intptr_t portably in 5.5 onward?
++#if !defined(_INTPTR_T_DEFINED)
+ typedef int                     intptr_t;
++#endif //_INTPTR_T_DEFINED
++
++#if !defined(_UINTPTR_T_DEFINED)
+ typedef unsigned int            uintptr_t;
++#endif // _UINTPTR_T_DEFINED
++
+ // If this gets an error, figure out a symbol XXX that implies the
+ // prior definition of intptr_t, and add "&& !defined(XXX)" above.
+ #endif // _SYS_INT_TYPES_H
+ 
+ #endif // !LINUX && !_ALLBSD_SOURCE
+ 
++// NULL vs NULL_WORD:
++// On Linux NULL is defined as a special type '__null'. Assigning __null to
++// integer variable will cause gcc warning. Use NULL_WORD in places where a
++// pointer is stored as integer value.  On some platforms, sizeof(intptr_t) >
++// sizeof(void*), so here we want something which is integer type, but has the
++// same size as a pointer.
++#ifdef __GNUC__
++#if defined(_LP64) && !defined (__MINGW32__)
++  #define NULL_WORD  0L
++#else
++  // Cast 0 to intptr_t rather than int32_t since they are not the same type
++  // on platforms such as Mac OS X.
++  #define NULL_WORD  ((intptr_t)0)
++#endif
++#else
++#define NULL_WORD  NULL
++#endif
++
+ // Additional Java basic types
+ 
+ typedef uint8_t  jubyte;
+@@ -218,6 +244,8 @@
+ #elif defined(LINUX) || defined(_ALLBSD_SOURCE)
+ inline int g_isnan(float  f) { return isnanf(f); }
+ inline int g_isnan(double f) { return isnan(f); }
++#elif defined(WIN32)
++inline int g_isnan(double f) { return isnan(f); }
+ #else
+ #error "missing platform-specific definition here"
+ #endif
+diff -r b756e7a2ec33 test/native/gtestMain.cpp
+--- a/test/native/gtestMain.cpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/test/native/gtestMain.cpp	Fri Oct 27 19:28:15 2017 +0200
+@@ -191,7 +191,7 @@
+ #endif // __APPLE__
+ 
+ #else  // _WIN32
+-  char* java_home_var = "_ALT_JAVA_HOME_DIR";
++  const char* java_home_var = "_ALT_JAVA_HOME_DIR";
+   size_t len = strlen(java_home) + strlen(java_home_var) + 2;
+   char * envString = new char[len];
+   sprintf_s(envString, len, "%s=%s", java_home_var, java_home);
+diff -r b756e7a2ec33 test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c
+--- a/test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c	Thu Aug 03 18:56:57 2017 +0000
++++ b/test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c	Fri Oct 27 19:28:15 2017 +0200
+@@ -21,6 +21,7 @@
+  * questions.
+  *
+  */
++#define __USE_MINGW_ANSI_STDIO 1
+ #include <jni.h>
+ #include <stdlib.h>
+ 
+@@ -42,7 +43,7 @@
+ void closeHandle() {
+ #ifdef WINDOWS
+   if (!FreeLibrary(handle)) {
+-   fprintf(stderr, "Error occurred while closing handle: 0x%02X\n", GetLastError());
++   fprintf(stderr, "Error occurred while closing handle: 0x%02lX\n", GetLastError());
+   }
+ #else
+   if (dlclose(handle) != 0) {
+@@ -83,7 +84,7 @@
+     }
+   } else {
+ #ifdef WINDOWS
+-    fprintf(stderr, "ERROR: Can't load JVM library: 0x%02X\n", GetLastError());
++    fprintf(stderr, "ERROR: Can't load JVM library: 0x%02lX\n", GetLastError());
+ #else
+     fprintf(stderr, "ERROR: Can't load JVM library: %s\n", dlerror());
+ #endif // WINDOWS

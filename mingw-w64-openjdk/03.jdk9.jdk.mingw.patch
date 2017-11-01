@@ -1,0 +1,3226 @@
+diff -r 65464a307408 make/launcher/Launcher-jdk.accessibility.gmk
+--- a/make/launcher/Launcher-jdk.accessibility.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/launcher/Launcher-jdk.accessibility.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -30,18 +30,25 @@
+ 
+ ifeq ($(OPENJDK_TARGET_OS), windows)
+ 
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      JABSWITCH_CFLAGS := $(filter-out -Zc:wchar_t-, $(CFLAGS_JDKEXE)) -Zc:wchar_t \
++          -analyze- -Od -Gd -D_WINDOWS \
++          -D_UNICODE -DUNICODE -RTC1 -EHsc
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      JABSWITCH_CFLAGS := $(CFLAGS_JDKEXE) -D_WINDOWS -D_UNICODE -DUNICODE
++  endif
++
+   JABSWITCH_SRC := $(JDK_TOPDIR)/src/jdk.accessibility/windows/native/jabswitch
+   ACCESSBRIDGE_SRC := $(JDK_TOPDIR)/src/jdk.accessibility/windows/native/common
+ 
+   $(eval $(call SetupNativeCompilation,BUILD_JABSWITCH, \
+       SRC := $(JABSWITCH_SRC), \
++      TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+       INCLUDE_FILES := jabswitch.cpp, \
+-      CFLAGS := $(filter-out -Zc:wchar_t-, $(CFLAGS_JDKEXE)) -Zc:wchar_t \
+-          -analyze- -Od -Gd -D_WINDOWS \
+-          -D_UNICODE -DUNICODE -RTC1 -EHsc, \
++      CFLAGS := $(JABSWITCH_CFLAGS), \
+       DISABLED_WARNINGS_microsoft := 4267 4996, \
+       LDFLAGS := $(LDFLAGS_JDKEXE), \
+-      LIBS := advapi32.lib version.lib user32.lib, \
++      LIBS_windows := advapi32.lib version.lib user32.lib, \
+       OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/jdk.accessibility/jabswitch, \
+       OUTPUT_DIR := $(SUPPORT_OUTPUTDIR)/modules_cmds/jdk.accessibility, \
+       PROGRAM := jabswitch, \
+@@ -65,6 +72,13 @@
+       $(TOPDIR)/common \
+       $(TOPDIR)/toolscommon)
+ 
++  ACCESSINSPECTOR_CFLAGS := $(CFLAGS_JDKEXE) $(TOOLS_CFLAGS) -DACCESSBRIDGE_ARCH_$2
++  ACCESSINSPECTOR_LDFLAGS_windows :=
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      ACCESSINSPECTOR_CFLAGS += -EHsc
++      ACCESSINSPECTOR_LDFLAGS_windows += -stack:655360
++  endif
++
+   define SetupInspector
+   # Parameter 1 File name suffix
+   # Parameter 2 ACCESSBRIDGE_ARCH_ -D suffix
+@@ -72,9 +86,11 @@
+     $$(eval $$(call SetupNativeCompilation, BUILD_JACCESSINSPECTOR$1, \
+       SRC := $(TOPDIR)/jaccessinspector $(TOPDIR)/common \
+           $(TOPDIR)/toolscommon $(TOPDIR)/bridge, \
+-      CFLAGS := $$(CFLAGS_JDKEXE) $(TOOLS_CFLAGS) -DACCESSBRIDGE_ARCH_$2 -EHsc, \
+-      LDFLAGS := $$(LDFLAGS_JDKEXE) -stack:655360, \
+-      LIBS := advapi32.lib user32.lib, \
++      TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
++      CFLAGS := $(ACCESSINSPECTOR_CFLAGS), \
++      LDFLAGS := $$(LDFLAGS_JDKEXE) , \
++      LDFLAGS_windows := $(ACCESSINSPECTOR_LDFLAGS_windows), \
++      LIBS_windows := advapi32.lib user32.lib, \
+       OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/jdk.accessibility/jaccessinspector$1, \
+       OUTPUT_DIR := $(SUPPORT_OUTPUTDIR)/modules_cmds/jdk.accessibility, \
+       PROGRAM := jaccessinspector$1, \
+@@ -92,6 +108,13 @@
+ ################################################################################
+ # jaccesswalker
+ 
++  JACCESSWALKER_CFLAGS := $(CFLAGS_JDKEXE) $(TOOLS_CFLAGS) -DACCESSBRIDGE_ARCH_$2
++  JACCESSWALKER_LDFLAGS_windows :=
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      JACCESSWALKER_CFLAGS += -EHsc
++      JACCESSWALKER_LDFLAGS_windows += -stack:655360
++  endif
++
+   define SetupWalker
+   # Parameter 1 File name suffix
+   # Parameter 2 ACCESSBRIDGE_ARCH_ -D suffix
+@@ -99,9 +122,11 @@
+     $$(eval $$(call SetupNativeCompilation,BUILD_JACCESSWALKER$1, \
+       SRC := $(TOPDIR)/jaccesswalker $(TOPDIR)/common \
+           $(TOPDIR)/toolscommon $(TOPDIR)/bridge, \
+-      CFLAGS := $$(CFLAGS_JDKEXE) $(TOOLS_CFLAGS) -DACCESSBRIDGE_ARCH_$2 -EHsc, \
+-      LDFLAGS := $$(LDFLAGS_JDKEXE) -stack:655360, \
+-      LIBS := advapi32.lib comctl32.lib gdi32.lib user32.lib, \
++      TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
++      CFLAGS := $(JACCESSWALKER_CFLAGS), \
++      LDFLAGS := $$(LDFLAGS_JDKEXE), \
++      LDFLAGS_Windows := $(JACCESSWALKER_LDFLAGS_windows), \
++      LIBS_windows := advapi32.lib comctl32.lib gdi32.lib user32.lib, \
+       OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/jdk.accessibility/jaccesswalker$1, \
+       OUTPUT_DIR := $(SUPPORT_OUTPUTDIR)/modules_cmds/jdk.accessibility, \
+       PROGRAM := jaccesswalker$1, \
+diff -r 65464a307408 make/launcher/LauncherCommon.gmk
+--- a/make/launcher/LauncherCommon.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/launcher/LauncherCommon.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -174,6 +174,21 @@
+     endif
+   endif
+ 
++  ifeq ($(OPENJDK_TARGET_OS), windows)
++      LAUNCHER_LIBS_windows := $$(notdir $$($1_WINDOWS_JLI_LIB)) \
++        java.lib advapi32.lib \
++        $$($1_LIBS_windows)
++      ifeq ($(TOOLCHAIN_TYPE), microsoft)
++          LAUNCHER_LDFLAGS_windows := /LIBPATH:"$(dir $$($1_WINDOWS_JLI_LIB))" \
++            /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.base/libjava"
++      else ifeq ($(TOOLCHAIN_TYPE), gcc)
++          LAUNCHER_LDFLAGS_windows := -L$$(dir $$($1_WINDOWS_JLI_LIB)) -L$(SUPPORT_OUTPUTDIR)/native/java.base/libjava
++          ifeq ($(USE_EXTERNAL_LIBZ), true)
++            LAUNCHER_LIBS_windows += z.lib
++          endif            
++      endif
++  endif
++
+   $$(eval $$(call SetupNativeCompilation, BUILD_LAUNCHER_$1, \
+       EXTRA_FILES := $(LAUNCHER_SRC)/main.c, \
+       OPTIMIZATION := $$($1_OPTIMIZATION), \
+@@ -193,14 +208,13 @@
+           -L$(SUPPORT_OUTPUTDIR)/modules_libs/java.base/jli, \
+       LDFLAGS_solaris := $$($1_LDFLAGS_solaris) \
+           -L$(SUPPORT_OUTPUTDIR)/modules_libs/java.base/jli, \
++      LDFLAGS_windows := $$(LAUNCHER_LDFLAGS_windows), \
+       MAPFILE := $$($1_MAPFILE), \
+       LIBS := $(JDKEXE_LIBS) $$($1_LIBS), \
+       LIBS_unix := $$($1_LIBS_unix), \
+       LIBS_linux := -lpthread -ljli $(LIBDL) -lc, \
+       LIBS_solaris := -ljli -lthread $(LIBDL) -lc, \
+-      LIBS_windows := $$($1_WINDOWS_JLI_LIB) \
+-          $(SUPPORT_OUTPUTDIR)/native/java.base/libjava/java.lib advapi32.lib \
+-          $$($1_LIBS_windows), \
++      LIBS_windows := $$(LAUNCHER_LIBS_windows), \
+       OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/$(MODULE)/$1_objs, \
+       OUTPUT_DIR := $$($1_OUTPUT_DIR), \
+       PROGRAM := $1, \
+diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
+--- a/make/lib/Awt2dLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Awt2dLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -203,7 +203,21 @@
+       awt/image/cvutils/img_colors.c \
+       #
+ 
+-  LIBAWT_CFLAGS += -EHsc -DUNICODE -D_UNICODE
++  LIBAWT_CFLAGS +=  -DUNICODE -D_UNICODE
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBAWT_CFLAGS += -EHsc
++    LIBAWT_LDFLAGS_windows := -delayload:user32.dll -delayload:gdi32.dll \
++    -delayload:shell32.dll -delayload:winmm.dll \
++    -delayload:winspool.drv -delayload:imm32.dll \
++    -delayload:ole32.dll -delayload:comdlg32.dll \
++    -delayload:comctl32.dll -delayload:shlwapi.dll \
++    /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBAWT_CFLAGS += 
++    LIBAWT_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
++  endif
++
+   ifeq ($(OPENJDK_TARGET_CPU_BITS), 64)
+     LIBAWT_CFLAGS += -DMLIB_OS64BIT
+   endif
+@@ -232,6 +246,7 @@
+     SRC := $(LIBAWT_DIRS), \
+     EXCLUDES := $(LIBAWT_EXCLUDES), \
+     EXCLUDE_FILES := $(LIBAWT_EXFILES), \
++    TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+     OPTIMIZATION := LOW, \
+     CFLAGS := $(CFLAGS_JDKLIB) $(LIBAWT_CFLAGS), \
+     DISABLED_WARNINGS_gcc := sign-compare unused-result maybe-uninitialized \
+@@ -243,11 +258,7 @@
+     MAPFILE := $(LIBAWT_MAPFILE), \
+     LDFLAGS := $(LDFLAGS_JDKLIB) $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_macosx := -L$(INSTALL_LIBRARIES_HERE), \
+-    LDFLAGS_windows := -delayload:user32.dll -delayload:gdi32.dll \
+-        -delayload:shell32.dll -delayload:winmm.dll \
+-        -delayload:winspool.drv -delayload:imm32.dll \
+-        -delayload:ole32.dll -delayload:comdlg32.dll \
+-        -delayload:comctl32.dll -delayload:shlwapi.dll, \
++    LDFLAGS_windows := $(LIBAWT_LDFLAGS_windows), \
+     LIBS_unix := -ljvm -ljava $(LIBM), \
+     LIBS_linux :=  $(LIBDL), \
+     LIBS_solaris := $(LIBDL) -lc, \
+@@ -262,7 +273,7 @@
+     LIBS_windows := kernel32.lib user32.lib gdi32.lib winspool.lib \
+         imm32.lib ole32.lib uuid.lib shell32.lib \
+         comdlg32.lib winmm.lib comctl32.lib shlwapi.lib \
+-        delayimp.lib jvm.lib $(WIN_JAVA_LIB) advapi32.lib, \
++        delayimp.lib jvm.lib $(notdir $(WIN_JAVA_LIB)) advapi32.lib d2d1.lib, \
+     VERSIONINFO_RESOURCE := $(LIBAWT_VERSIONINFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) $(LIBAWT_RC_FLAGS) \
+         -D "JDK_FNAME=awt.dll" \
+@@ -394,15 +405,25 @@
+ # The fast floor code loses precision.
+ LCMS_CFLAGS=-DCMS_DONT_USE_FAST_FLOOR
+ 
++ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LCMS_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_AWT_LIB))" /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LCMS_LDFLAGS_windows := -L$(dir $(WIN_AWT_LIB)) -L$(dir $(WIN_JAVA_LIB))
++endif
++
+ ifeq ($(USE_EXTERNAL_LCMS), true)
+-  # If we're using an external library, we'll just need the wrapper part.
+-  # By including it explicitly, all other files will be excluded.
+-  BUILD_LIBLCMS_INCLUDE_FILES := LCMS.c
++    # If we're using an external library, we'll just need the wrapper part.
++    # By including it explicitly, all other files will be excluded.
++    BUILD_LIBLCMS_INCLUDE_FILES := LCMS.c
++
++    ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LCMS_LDFLAGS_windows +=  $(LCMS_LIBS)
++    endif
+ else
+-  BUILD_LIBLCMS_INCLUDE_FILES :=
+-  # If we're using the bundled library, we'll need to include it in the
+-  # include path explicitly. Otherwise the system headers will be used.
+-  LIBLCMS_CPPFLAGS += $(addprefix -I, $(LIBLCMS_SRC))
++    BUILD_LIBLCMS_INCLUDE_FILES :=
++    # If we're using the bundled library, we'll need to include it in the
++    # include path explicitly. Otherwise the system headers will be used.
++    LIBLCMS_CPPFLAGS += $(addprefix -I, $(LC))
+ endif
+ 
+ $(eval $(call SetupNativeCompilation,BUILD_LIBLCMS, \
+@@ -425,12 +446,13 @@
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_unix := -L$(INSTALL_LIBRARIES_HERE), \
+     LDFLAGS_solaris := /usr/lib$(OPENJDK_TARGET_CPU_ISADIR)/libm.so.2, \
++    LDFLAGS_windows := $(LCMS_LDFLAGS_windows), \
+     LIBS_unix := -lawt -ljvm -ljava $(LCMS_LIBS), \
+     LIBS_linux := $(LIBM), \
+     LIBS_macosx := $(LIBM), \
+     LIBS_solaris := -lc, \
+     LIBS_aix := $(LIBM),\
+-    LIBS_windows := $(WIN_AWT_LIB) $(WIN_JAVA_LIB), \
++    LIBS_windows := $(notdir $(WIN_AWT_LIB)) $(notdir $(WIN_JAVA_LIB)), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=lcms.dll" \
+@@ -482,6 +504,12 @@
+   BUILD_LIBJAVAJPEG_HEADERS := $(addprefix -I, $(LIBJAVAJPEG_SRC))
+ endif
+ 
++ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBJPEG_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBJPEG_LDFLAGS_windows := 
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBJAVAJPEG, \
+     LIBRARY := javajpeg, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -495,8 +523,9 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libjpeg/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBJPEG_LDFLAGS_windows), \
+     LIBS := $(LIBJPEG_LIBS) $(JDKLIB_LIBS), \
+-    LIBS_windows := $(WIN_JAVA_LIB) jvm.lib, \
++    LIBS_windows := $(notdir $(WIN_JAVA_LIB)) jvm.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=javajpeg.dll" \
+@@ -656,6 +685,12 @@
+   BUILD_LIBFONTMANAGER_ExtensionSubtables.cpp_CXXFLAGS := -fno-strict-aliasing
+ endif
+ 
++ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBFONTMANAGER_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_AWT_LIB))" /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBFONTMANAGER_LDFLAGS_windows := -L$(dir $(WIN_AWT_LIB)) -L$(dir $(WIN_JAVA_LIB))
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBFONTMANAGER, \
+     LIBRARY := fontmanager, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -687,13 +722,14 @@
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_unix := -L$(INSTALL_LIBRARIES_HERE), \
+     LDFLAGS_macosx := -undefined dynamic_lookup, \
++    LDFLAGS_windows := $(LIBFONTMANAGER_LDFLAGS_windows), \
+     LIBS := $(BUILD_LIBFONTMANAGER_FONTLIB), \
+     LIBS_unix := -lawt -ljava -ljvm $(LIBM) $(LIBCXX), \
+     LIBS_linux := -lc, \
+     LIBS_solaris := -lawt_headless -lc, \
+     LIBS_aix := -lawt_headless,\
+-    LIBS_windows := $(WIN_JAVA_LIB) advapi32.lib user32.lib gdi32.lib \
+-        $(WIN_AWT_LIB), \
++    LIBS_windows := $(notdir $(WIN_JAVA_LIB)) advapi32.lib user32.lib gdi32.lib \
++        $(notdir $(WIN_AWT_LIB)), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=fontmanager.dll" \
+@@ -724,10 +760,18 @@
+       -I$(JDK_TOPDIR)/src/java.desktop/share/native/include \
+       $(LIBJAVA_HEADER_FLAGS) \
+       #
++      
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBJAWT_CFLAGS += -EHsc
++    LIBJAWT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_AWT_LIB))"
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBJAWT_LDFLAGS_windows := -L$(dir $(WIN_AWT_LIB))
++  endif
+ 
+   ifeq ($(OPENJDK_TARGET_CPU), x86)
+     KERNEL32_LIB := kernel32.lib
+   endif
++
+   $(eval $(call SetupNativeCompilation,BUILD_LIBJAWT, \
+       LIBRARY := jawt, \
+       OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -735,10 +779,12 @@
+       INCLUDE_FILES := $(LIBJAWT_INCLUDE_FILES), \
+       OPTIMIZATION := LOW, \
+       CFLAGS := $(CXXFLAGS_JDKLIB) \
+-          -EHsc -DUNICODE -D_UNICODE \
++          -DUNICODE -D_UNICODE \
+           $(LIBJAWT_CFLAGS), \
+       LDFLAGS := $(LDFLAGS_JDKLIB) $(LDFLAGS_CXX_JDK), \
+-      LIBS := $(JDKLIB_LIBS) $(KERNEL32_LIB) advapi32.lib $(WIN_AWT_LIB), \
++      LDFLAGS_windows := $(LIBJAWT_LDFLAGS_windows), \
++      LIBS := $(JDKLIB_LIBS), \
++      LIBS_windows :=  $(KERNEL32_LIB) advapi32.lib $(notdir $(WIN_AWT_LIB)), \
+       VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+       RC_FLAGS := $(RC_FLAGS) \
+           -D "JDK_FNAME=jawt.dll" \
+@@ -904,12 +950,17 @@
+         -framework Cocoa \
+         -framework JavaNativeFoundation
+   else ifeq ($(OPENJDK_TARGET_OS), windows)
+-    LIBSPLASHSCREEN_LDFLAGS := -delayload:user32.dll
+-    LIBSPLASHSCREEN_LIBS += kernel32.lib user32.lib gdi32.lib delayimp.lib $(WIN_JAVA_LIB) jvm.lib
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBSPLASHSCREEN_LDFLAGS_windows := -delayload:user32.dll /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBSPLASHSCREEN_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
++    endif
+   else
+     LIBSPLASHSCREEN_LIBS += $(X_LIBS) -lX11 -lXext $(LIBM) -lpthread -ldl
+   endif
+ 
++
++
+   $(eval $(call SetupNativeCompilation,BUILD_LIBSPLASHSCREEN, \
+       LIBRARY := splashscreen, \
+       OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -927,9 +978,11 @@
+       MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libsplashscreen/mapfile-vers, \
+       LDFLAGS := $(LIBSPLASHSCREEN_LDFLAGS) $(LDFLAGS_JDKLIB) \
+           $(call SET_SHARED_LIBRARY_ORIGIN), \
++      LDFLAGS_windows := $(LIBSPLASHSCREEN_LDFLAGS_windows), \
+       LIBS := $(JDKLIB_LIBS) $(LIBSPLASHSCREEN_LIBS) $(LIBZ) \
+                         $(GIFLIB_LIBS) $(LIBJPEG_LIBS) $(PNG_LIBS), \
+       LIBS_aix := -liconv, \
++      LIBS_windows := kernel32.lib user32.lib gdi32.lib delayimp.lib $(notdir $(WIN_JAVA_LIB)) jvm.lib d2d1.lib, \
+       VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+       RC_FLAGS := $(RC_FLAGS) \
+           -D "JDK_FNAME=splashscreen.dll" \
+diff -r 65464a307408 make/lib/CoreLibraries.gmk
+--- a/make/lib/CoreLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/CoreLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -153,6 +153,17 @@
+   endif
+ endif
+ 
++ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        LIBJAVA_LDFLAGS_windows := -export:winFileHandleOpen -export:handleLseek \
++            -export:getLastErrorString \
++            -export:getErrorString -delayload:shell32.dll \
++            /LIBPATH:"$(dir $(BUILD_LIBFDLIBM))" /LIBPATH:"$(dir $(WIN_VERIFY_LIB))"
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBJAVA_LDFLAGS_windows := -L$(dir $(BUILD_LIBFDLIBM)) -L$(dir $(WIN_VERIFY_LIB))
++    endif
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBJAVA, \
+     LIBRARY := java, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -169,9 +180,7 @@
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_macosx := -L$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/, \
+-    LDFLAGS_windows := -export:winFileHandleOpen -export:handleLseek \
+-        -export:getLastErrorString \
+-        -export:getErrorString -delayload:shell32.dll, \
++    LDFLAGS_windows := $(LIBJAVA_LDFLAGS_windows), \
+     LIBS_unix := -ljvm -lverify, \
+     LIBS_linux := $(LIBDL) $(BUILD_LIBFDLIBM), \
+     LIBS_solaris := -lsocket -lnsl -lscf $(LIBDL) $(BUILD_LIBFDLIBM) -lc, \
+@@ -180,7 +189,7 @@
+         -framework CoreFoundation \
+         -framework Foundation \
+         -framework Security -framework SystemConfiguration, \
+-    LIBS_windows := jvm.lib $(BUILD_LIBFDLIBM) $(WIN_VERIFY_LIB) \
++    LIBS_windows := jvm.lib $(notdir $(BUILD_LIBFDLIBM)) $(notdir $(WIN_VERIFY_LIB)) \
+         shell32.lib delayimp.lib \
+         advapi32.lib version.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+@@ -216,6 +225,19 @@
+   BUILD_LIBZIP_MMAP := -DUSE_MMAP
+ endif
+ 
++ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        LIBZIP_LDFLAGS_windows := -export:ZIP_Open -export:ZIP_Close -export:ZIP_FindEntry \
++        -export:ZIP_ReadEntry -export:ZIP_GetNextEntry \
++        -export:ZIP_InflateFully -export:ZIP_CRC32 -export:ZIP_FreeEntry \
++        /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++        LIBZIP_LIBS_windows := jvm.lib $(notdir $(WIN_JAVA_LIB))
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBZIP_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
++        LIBZIP_LIBS_windows := jvm.lib $(notdir $(WIN_JAVA_LIB)) z.lib
++    endif
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBZIP, \
+     LIBRARY := zip, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -232,12 +254,10 @@
+     REORDER := $(BUILD_LIBZIP_REORDER), \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+-    LDFLAGS_windows := -export:ZIP_Open -export:ZIP_Close -export:ZIP_FindEntry \
+-        -export:ZIP_ReadEntry -export:ZIP_GetNextEntry \
+-        -export:ZIP_InflateFully -export:ZIP_CRC32 -export:ZIP_FreeEntry, \
++    LDFLAGS_windows := $(LIBZIP_LDFLAGS_windows), \
+     LIBS_unix := -ljvm -ljava $(LIBZ), \
+     LIBS_solaris := -lc, \
+-    LIBS_windows := jvm.lib $(WIN_JAVA_LIB), \
++    LIBS_windows := $(LIBZIP_LIBS_windows), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=zip.dll" \
+@@ -258,6 +278,16 @@
+     -I$(JDK_TOPDIR)/src/java.base/share/native/libjimage \
+     -I$(SUPPORT_OUTPUTDIR)/headers/java.base \
+     #
++ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        LIBJIMAGE_LDFLAGS_windows := -export:JIMAGE_Open -export:JIMAGE_Close \
++        -export:JIMAGE_PackageToModule \
++        -export:JIMAGE_FindResource -export:JIMAGE_GetResource \
++        -export:JIMAGE_ResourceIterator -export:JIMAGE_ResourcePath
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBJIMAGE_LDFLAGS_windows := 
++    endif
++endif
+ 
+ $(eval $(call SetupNativeCompilation,BUILD_LIBJIMAGE, \
+     LIBRARY := jimage, \
+@@ -273,10 +303,7 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libjimage/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) $(LDFLAGS_CXX_JDK) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+-    LDFLAGS_windows := -export:JIMAGE_Open -export:JIMAGE_Close \
+-        -export:JIMAGE_PackageToModule \
+-        -export:JIMAGE_FindResource -export:JIMAGE_GetResource \
+-        -export:JIMAGE_ResourceIterator -export:JIMAGE_ResourcePath, \
++    LDFLAGS_windows := $(LIBJIMAGE_LDFLAGS_windows), \
+     LIBS_unix := -ljvm -ldl $(LIBCXX), \
+     LIBS_solaris := -lc, \
+     LIBS_macosx := -lc++, \
+@@ -326,14 +353,45 @@
+ endif
+ 
+ ifeq ($(OPENJDK_TARGET_OS), windows)
+-  # Staticically link with c runtime on windows.
+-  LIBJLI_CFLAGS := $(filter-out -MD, $(LIBJLI_CFLAGS))
+-  LIBJLI_OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE)
+-  # Supply the name of the C runtime lib.
+-  LIBJLI_CFLAGS += -DMSVCR_DLL_NAME='"$(notdir $(MSVCR_DLL))"'
+-  ifneq ($(MSVCP_DLL), )
+-    LIBJLI_CFLAGS += -DMSVCP_DLL_NAME='"$(notdir $(MSVCP_DLL))"'
+-  endif
++    LIBJLI_OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++
++        # Staticically link with c runtime on windows.
++        LIBJLI_CFLAGS := $(filter-out -MD, $(LIBJLI_CFLAGS))
++        # Supply the name of the C runtime lib.
++        LIBJLI_CFLAGS += -DMSVCR_DLL_NAME='"$(notdir $(MSVCR_DLL))"'
++        ifneq ($(MSVCP_DLL), )
++            LIBJLI_CFLAGS += -DMSVCP_DLL_NAME='"$(notdir $(MSVCP_DLL))"'
++        endif
++
++        LIBJLI_LDFLAGS_windows := \
++            -export:JLI_Launch \
++            -export:JLI_ManifestIterate \
++            -export:JLI_SetTraceLauncher \
++            -export:JLI_ReportErrorMessage \
++            -export:JLI_ReportErrorMessageSys \
++            -export:JLI_ReportMessage \
++            -export:JLI_ReportExceptionDescription \
++            -export:JLI_MemAlloc \
++            -export:JLI_CmdToArgs \
++            -export:JLI_GetStdArgc \
++            -export:JLI_GetStdArgs \
++            -export:JLI_List_new \
++            -export:JLI_List_add \
++            -export:JLI_StringDup \
++            -export:JLI_MemFree \
++            -export:JLI_InitArgProcessing \
++            -export:JLI_PreprocessArg \
++            -export:JLI_AddArgsFromEnvVar \
++            -export:JLI_GetAppArgIndex
++
++        LIBJLI_LIBS_windows := advapi32.lib comctl32.lib user32.lib
++
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBJLI_LDFLAGS_windows :=
++        LIBJLI_LIBS_windows := advapi32.lib comctl32.lib user32.lib z.lib
++    endif
++
+ else
+   LIBJLI_OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE)/jli
+ endif
+@@ -369,32 +427,13 @@
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_linux := $(call SET_SHARED_LIBRARY_ORIGIN,/..), \
+     LDFLAGS_solaris := $(call SET_SHARED_LIBRARY_ORIGIN,/..), \
+-    LDFLAGS_windows := \
+-        -export:JLI_Launch \
+-        -export:JLI_ManifestIterate \
+-        -export:JLI_SetTraceLauncher \
+-        -export:JLI_ReportErrorMessage \
+-        -export:JLI_ReportErrorMessageSys \
+-        -export:JLI_ReportMessage \
+-        -export:JLI_ReportExceptionDescription \
+-        -export:JLI_MemAlloc \
+-        -export:JLI_CmdToArgs \
+-        -export:JLI_GetStdArgc \
+-        -export:JLI_GetStdArgs \
+-        -export:JLI_List_new \
+-        -export:JLI_List_add \
+-        -export:JLI_StringDup \
+-        -export:JLI_MemFree \
+-        -export:JLI_InitArgProcessing \
+-        -export:JLI_PreprocessArg \
+-        -export:JLI_AddArgsFromEnvVar \
+-        -export:JLI_GetAppArgIndex, \
++    LDFLAGS_windows := $(LIBJLI_LDFLAGS_windows), \
+     LIBS_unix := $(LIBZ), \
+     LIBS_linux := $(LIBDL) -lc -lpthread, \
+     LIBS_solaris := $(LIBDL) -lc, \
+     LIBS_aix := $(LIBDL),\
+     LIBS_macosx := -framework Cocoa -framework Security -framework ApplicationServices, \
+-    LIBS_windows := advapi32.lib comctl32.lib user32.lib, \
++    LIBS_windows := $(LIBJLI_LIBS_windows), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=jli.dll" \
+diff -r 65464a307408 make/lib/Lib-java.instrument.gmk
+--- a/make/lib/Lib-java.instrument.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-java.instrument.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -41,12 +41,20 @@
+     #
+ 
+ ifeq ($(OPENJDK_TARGET_OS), windows)
+-  # Statically link the C runtime so that there are not dependencies on modules
+-  # not on the search patch when invoked from the Windows system directory
+-  # (or elsewhere).
+-  LIBINSTRUMENT_CFLAGS := $(filter-out -MD, $(LIBINSTRUMENT_CFLAGS))
+-  # equivalent of strcasecmp is stricmp on Windows
+-  LIBINSTRUMENT_CFLAGS += -Dstrcasecmp=stricmp
++  LIBINSTRUMENT_LIBS_windows := jvm.lib $(notdir $(WIN_JAVA_LIB)) advapi32.lib jli_static.lib
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBINSTRUMENT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))" /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.base"
++  
++    # Statically link the C runtime so that there are not dependencies on modules
++    # not on the search patch when invoked from the Windows system directory
++    # (or elsewhere).
++    LIBINSTRUMENT_CFLAGS := $(filter-out -MD, $(LIBINSTRUMENT_CFLAGS))
++    # equivalent of strcasecmp is stricmp on Windows
++    LIBINSTRUMENT_CFLAGS += -Dstrcasecmp=stricmp
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBINSTRUMENT_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))" -L"$(SUPPORT_OUTPUTDIR)/native/java.base"
++    LIBINSTRUMENT_LIBS_windows += z.lib
++  endif
+ endif
+ 
+ $(eval $(call SetupNativeCompilation,BUILD_LIBINSTRUMENT, \
+@@ -67,6 +75,7 @@
+         -L$(call FindLibDirForModule, java.base)/jli, \
+     LDFLAGS_macosx := -Wl$(COMMA)-all_load, \
+     LDFLAGS_aix := -L$(SUPPORT_OUTPUTDIR)/native/java.base, \
++    LDFLAGS_windows := $(LIBINSTRUMENT_LDFLAGS_windows), \
+     LIBS := $(JDKLIB_LIBS), \
+     LIBS_unix := -ljava -ljvm $(LIBZ), \
+     LIBS_linux := -ljli $(LIBDL), \
+@@ -75,8 +84,7 @@
+     LIBS_macosx := -liconv -framework Cocoa -framework Security \
+         -framework ApplicationServices \
+         $(SUPPORT_OUTPUTDIR)/native/java.base/libjli_static.a, \
+-    LIBS_windows := jvm.lib $(WIN_JAVA_LIB) advapi32.lib \
+-        $(SUPPORT_OUTPUTDIR)/native/java.base/jli_static.lib, \
++    LIBS_windows := $(LIBINSTRUMENT_LIBS_windows), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=instrument.dll" \
+diff -r 65464a307408 make/lib/Lib-java.management.gmk
+--- a/make/lib/Lib-java.management.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-java.management.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -44,6 +44,12 @@
+   endif
+ endif
+ 
++ifeq ($(TOOLCHAIN_TYPE), microsoft)
++  LIBMANAGEMENT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++else ifeq ($(TOOLCHAIN_TYPE), gcc)
++  LIBMANAGEMENT_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBMANAGEMENT, \
+     LIBRARY := management, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -53,10 +59,11 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libmanagement/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBMANAGEMENT_LDFLAGS_windows), \
+     LIBS := $(JDKLIB_LIBS), \
+     LIBS_solaris := -lkstat, \
+     LIBS_aix := -lperfstat,\
+-    LIBS_windows := jvm.lib psapi.lib $(WIN_JAVA_LIB) advapi32.lib, \
++    LIBS_windows := jvm.lib psapi.lib $(notdir $(WIN_JAVA_LIB)) advapi32.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=management.dll" \
+diff -r 65464a307408 make/lib/Lib-java.prefs.gmk
+--- a/make/lib/Lib-java.prefs.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-java.prefs.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -33,6 +33,12 @@
+   LIBPREF_SRC_DIRS := $(JDK_TOPDIR)/src/java.prefs/$(OPENJDK_TARGET_OS_TYPE)/native/libprefs
+ endif
+ 
++ifeq ($(TOOLCHAIN_TYPE), microsoft)
++  LIBPREF_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++else ifeq ($(TOOLCHAIN_TYPE), gcc)
++  LIBPREF_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBPREFS, \
+     LIBRARY := prefs, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -43,12 +49,13 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libprefs/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBPREF_LDFLAGS_windows), \
+     LIBS_unix := -ljvm, \
+     LIBS_linux := -ljava, \
+     LIBS_solaris := -ljava -lc, \
+     LIBS_aix := -ljava, \
+     LIBS_macosx := -framework CoreFoundation -framework Foundation, \
+-    LIBS_windows := advapi32.lib jvm.lib $(WIN_JAVA_LIB), \
++    LIBS_windows := advapi32.lib jvm.lib $(notdir $(WIN_JAVA_LIB)), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=prefs.dll" \
+diff -r 65464a307408 make/lib/Lib-java.security.jgss.gmk
+--- a/make/lib/Lib-java.security.jgss.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-java.security.jgss.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -58,8 +58,8 @@
+   ifeq ($(OPENJDK_TARGET_OS), windows)
+     BUILD_LIBKRB5_NAME := w2k_lsa_auth
+     BUILD_LIBKRB5_SRC := $(JDK_TOPDIR)/src/java.security.jgss/$(OPENJDK_TARGET_OS_TYPE)/native/libw2k_lsa_auth
+-    BUILD_LIBKRB5_LIBS := advapi32.lib Secur32.lib netapi32.lib kernel32.lib user32.lib \
+-        gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib \
++    BUILD_LIBKRB5_LIBS_windows := advapi32.lib Secur32.lib netapi32.lib kernel32.lib user32.lib \
++        gdi32.lib winspool.lib comdlg32.lib shell32.lib \
+         ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib wsock32.lib
+   else ifeq ($(OPENJDK_TARGET_OS), macosx)
+     BUILD_LIBKRB5_NAME := osxkrb5
+@@ -86,6 +86,7 @@
+         LDFLAGS := $(LDFLAGS_JDKLIB) \
+             $(call SET_SHARED_LIBRARY_ORIGIN), \
+         LIBS := $(BUILD_LIBKRB5_LIBS), \
++        LIBS_windows := $(BUILD_LIBKRB5_LIBS_windows), \
+         VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+         RC_FLAGS := $(RC_FLAGS) \
+             -D "JDK_FNAME=$(BUILD_LIBKRB5_NAME).dll" \
+diff -r 65464a307408 make/lib/Lib-jdk.accessibility.gmk
+--- a/make/lib/Lib-jdk.accessibility.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.accessibility.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -37,6 +37,12 @@
+       -I$(JDK_TOPDIR)/src/java.desktop/windows/native/include \
+       -I$(JDK_TOPDIR)/src/java.desktop/share/native/include
+ 
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBJAVAACCESSBRIDGE_LDFLAGS_windows := /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.desktop/libjawt" -subsystem:windows
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBJAVAACCESSBRIDGE_LDFLAGS_windows := -L$(SUPPORT_OUTPUTDIR)/native/java.desktop/libjawt -mwindows
++  endif
++
+   define SetupJavaDLL
+     # Parameter 1 Suffix
+     # Parameter 2 ACCESSBRIDGE_ARCH_ suffix
+@@ -45,15 +51,17 @@
+         LIBRARY = javaaccessbridge$1, \
+         OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+         SRC := $(JAVA_AB_SRCDIR), \
++        TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+         OPTIMIZATION := LOW, \
+         CFLAGS := $(CFLAGS_JDKLIB) $(ACCESSBRIDGE_CFLAGS) \
+             $(addprefix -I,$(JAVA_AB_SRCDIR)) \
+             -I$(ROOT_SRCDIR)/include/bridge \
+             -DACCESSBRIDGE_ARCH_$2, \
+-        LDFLAGS := $(LDFLAGS_JDKLIB) -subsystem:windows, \
+-        LIBS := kernel32.lib user32.lib gdi32.lib \
++        LDFLAGS := $(LDFLAGS_JDKLIB), \
++        LDFLAGS_windows := $(LIBJAVAACCESSBRIDGE_LDFLAGS_windows), \
++        LIBS_windows := kernel32.lib user32.lib gdi32.lib \
+             winspool.lib comdlg32.lib advapi32.lib shell32.lib \
+-            $(SUPPORT_OUTPUTDIR)/native/java.desktop/libjawt/jawt.lib \
++            jawt.lib \
+             ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib, \
+         VERSIONINFO_RESOURCE := $(ROOT_SRCDIR)/common/AccessBridgeStatusWindow.rc, \
+         RC_FLAGS := $(RC_FLAGS) \
+@@ -68,6 +76,12 @@
+     TARGETS += $$(BUILD_JAVAACCESSBRIDGE$1)
+   endef
+ 
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBWINDOWSACCESSBRIDGE_LDFLAGS_windows := -subsystem:windows -def:$(ROOT_SRCDIR)/libwindowsaccessbridge/WinAccessBridge.DEF
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBWINDOWSACCESSBRIDGE_LDFLAGS_windows := -mwindows
++  endif
++
+   define SetupWinDLL
+     # Parameter 1 Suffix
+     # Parameter 2 ACCESSBRIDGE_ARCH_ suffix
+@@ -75,14 +89,15 @@
+         LIBRARY = windowsaccessbridge$1, \
+         OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+         SRC := $(WIN_AB_SRCDIR), \
++        TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+         OPTIMIZATION := LOW, \
+         CFLAGS := $(filter-out -MD, $(CFLAGS_JDKLIB)) -MT $(ACCESSBRIDGE_CFLAGS) \
+             $(addprefix -I,$(WIN_AB_SRCDIR)) \
+             -I$(ROOT_SRCDIR)/include/bridge \
+             -DACCESSBRIDGE_ARCH_$2, \
+-        LDFLAGS := $(LDFLAGS_JDKLIB) -subsystem:windows \
+-            -def:$(ROOT_SRCDIR)/libwindowsaccessbridge/WinAccessBridge.DEF, \
+-        LIBS := kernel32.lib user32.lib gdi32.lib \
++        LDFLAGS := $(LDFLAGS_JDKLIB),  \
++        LDFLAGS_windows := $(LIBWINDOWSACCESSBRIDGE_LDFLAGS_windows), \
++        LIBS_windows := kernel32.lib user32.lib gdi32.lib \
+             winspool.lib comdlg32.lib advapi32.lib shell32.lib \
+             ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib, \
+         VERSIONINFO_RESOURCE := $(ROOT_SRCDIR)/common/AccessBridgeStatusWindow.rc, \
+diff -r 65464a307408 make/lib/Lib-jdk.attach.gmk
+--- a/make/lib/Lib-jdk.attach.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.attach.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -28,6 +28,15 @@
+ ################################################################################
+ 
+ ifeq ($(OPENJDK_TARGET_OS), windows)
++  LIBATTACH_CFLAGS_windows :=
++
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBATTACH_CFLAGS_windows += /Gy
++    LIBATTACH_LDLAGS_windows := /LIBPATH="$(dir $(WIN_JAVA_LIB))" -order:@$(JDK_TOPDIR)/make/mapfiles/libattach/reorder-windows-$(OPENJDK_TARGET_CPU)
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBATTACH_LDLAGS_windows := -L$(notdir $(WIN_JAVA_LIB))
++  endif
++
+   # In (at least) VS2013 and later, -DPSAPI_VERSION=1 is needed to generate
+   # a binary that is compatible with windows versions older than 7/2008R2.
+   # See MSDN documentation for GetProcessMemoryInfo for more information.
+@@ -42,7 +51,7 @@
+     CFLAGS := $(CFLAGS_JDKLIB) \
+         -I$(SUPPORT_OUTPUTDIR)/headers/jdk.attach \
+         $(LIBJAVA_HEADER_FLAGS) $(LIBATTACH_CFLAGS), \
+-    CFLAGS_windows := /Gy, \
++    CFLAGS_windows := $(LIBATTACH_CFLAGS_windows), \
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libattach/mapfile-$(OPENJDK_TARGET_OS), \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+@@ -51,10 +60,10 @@
+         -D "JDK_FTYPE=0x2L", \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+-    LDFLAGS_windows := -order:@$(JDK_TOPDIR)/make/mapfiles/libattach/reorder-windows-$(OPENJDK_TARGET_CPU), \
++    LDFLAGS_windows := $(LIBATTACH_LDLAGS_windows), \
+     LIBS := $(JDKLIB_LIBS), \
+     LIBS_solaris := -ldoor, \
+-    LIBS_windows := $(WIN_JAVA_LIB) advapi32.lib psapi.lib, \
++    LIBS_windows := $(notdir $(WIN_JAVA_LIB)) advapi32.lib psapi.lib, \
+     OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libattach, \
+ ))
+ 
+diff -r 65464a307408 make/lib/Lib-jdk.crypto.mscapi.gmk
+--- a/make/lib/Lib-jdk.crypto.mscapi.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.crypto.mscapi.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -35,12 +35,13 @@
+       LIBRARY := sunmscapi, \
+       OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+       SRC := $(LIBSUNMSCAPI_SRC), \
++      TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+       OPTIMIZATION := LOW, \
+       CFLAGS := $(CFLAGS_JDKLIB) \
+           -I$(LIBSUNMSCAPI_SRC), \
+       LDFLAGS := $(LDFLAGS_JDKLIB) $(LDFLAGS_CXX_JDK) \
+           $(call SET_SHARED_LIBRARY_ORIGIN), \
+-      LIBS := crypt32.lib advapi32.lib, \
++      LIBS_windows := crypt32.lib advapi32.lib, \
+       VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+       RC_FLAGS := $(RC_FLAGS) \
+           -D "JDK_FNAME=sunmscapi.dll" \
+diff -r 65464a307408 make/lib/Lib-jdk.internal.le.gmk
+--- a/make/lib/Lib-jdk.internal.le.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.internal.le.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -44,7 +44,8 @@
+       CFLAGS := $(CFLAGS_JDKLIB) $(LIBJAVA_HEADER_FLAGS)\
+           $(LIBLE_CPPFLAGS), \
+       LDFLAGS := $(LDFLAGS_JDKLIB), \
+-      LIBS := $(JDKLIB_LIBS) user32.lib, \
++      LIBS := $(JDKLIB_LIBS), \
++      LIBS_windows := user32.lib, \
+       VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+       RC_FLAGS := $(RC_FLAGS) \
+           -D "JDK_FNAME=le.dll" \
+diff -r 65464a307408 make/lib/Lib-jdk.jdwp.agent.gmk
+--- a/make/lib/Lib-jdk.jdwp.agent.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.jdwp.agent.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -47,9 +47,10 @@
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+     LDFLAGS_windows := -export:jdwpTransport_OnLoad, \
++    LIBS := $(JDKLIB_LIBS), \
+     LIBS_linux := -lpthread, \
+     LIBS_solaris := -lnsl -lsocket -lc, \
+-    LIBS_windows := $(JDKLIB_LIBS) ws2_32.lib, \
++    LIBS_windows := ws2_32.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=dt_socket.dll" \
+diff -r 65464a307408 make/lib/Lib-jdk.management.agent.gmk
+--- a/make/lib/Lib-jdk.management.agent.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.management.agent.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -32,6 +32,13 @@
+     -I$(SUPPORT_OUTPUTDIR)/headers/jdk.management.agent \
+     $(LIBJAVA_HEADER_FLAGS) \
+     #
++ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        LIBMANAGEMENT_AGENT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBMANAGEMENT_AGENT_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
++    endif
++endif
+ 
+ $(eval $(call SetupNativeCompilation,BUILD_LIBMANAGEMENT_AGENT, \
+     LIBRARY := management_agent, \
+@@ -42,8 +49,9 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libmanagement_agent/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBMANAGEMENT_AGENT_LDFLAGS_windows), \
+     LIBS := $(JDKLIB_LIBS), \
+-    LIBS_windows := $(WIN_JAVA_LIB) advapi32.lib, \
++    LIBS_windows :=  $(notdir $(WIN_JAVA_LIB)) advapi32.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=management_agent.dll" \
+diff -r 65464a307408 make/lib/Lib-jdk.management.gmk
+--- a/make/lib/Lib-jdk.management.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.management.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -44,6 +44,11 @@
+   # a binary that is compatible with windows versions older than 7/2008R2.
+   # See MSDN documentation for GetProcessMemoryInfo for more information.
+   LIBMANAGEMENT_EXT_CFLAGS += -DPSAPI_VERSION=1
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBMANAGEMENT_EXT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBMANAGEMENT_EXT_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
++  endif
+ endif
+ 
+ LIBMANAGEMENT_EXT_OPTIMIZATION := HIGH
+@@ -63,10 +68,11 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libmanagement_ext/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBMANAGEMENT_EXT_LDFLAGS_windows), \
+     LIBS := $(JDKLIB_LIBS), \
+     LIBS_solaris := -lkstat, \
+     LIBS_aix := -lperfstat,\
+-    LIBS_windows := jvm.lib psapi.lib $(WIN_JAVA_LIB) advapi32.lib, \
++    LIBS_windows := jvm.lib psapi.lib $(notdir $(WIN_JAVA_LIB)) advapi32.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=management_ext.dll" \
+diff -r 65464a307408 make/lib/Lib-jdk.pack.gmk
+--- a/make/lib/Lib-jdk.pack.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.pack.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -26,6 +26,11 @@
+ include LibCommon.gmk
+ 
+ ################################################################################
++ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    LIBPACK_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))" -map:$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/unpack.map -debug
++else ifeq ($(TOOLCHAIN_TYPE), gcc)
++    LIBPACK_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
++endif
+ 
+ $(eval $(call SetupNativeCompilation,BUILD_LIBUNPACK, \
+     LIBRARY := unpack, \
+@@ -43,9 +48,9 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libunpack/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) $(LDFLAGS_CXX_JDK) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+-    LDFLAGS_windows := -map:$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/unpack.map -debug, \
++    LDFLAGS_windows := $(LIBPACK_LDFLAGS_windows), \
+     LIBS_unix := -ljvm $(LIBCXX) -ljava -lc, \
+-    LIBS_windows := jvm.lib $(WIN_JAVA_LIB), \
++    LIBS_windows := jvm.lib $(notdir $(WIN_JAVA_LIB)), \
+     OBJECT_DIR := $(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libunpack, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+diff -r 65464a307408 make/lib/Lib-jdk.security.auth.gmk
+--- a/make/lib/Lib-jdk.security.auth.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/Lib-jdk.security.auth.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -47,8 +47,9 @@
+     MAPFILE := $(LIBJAAS_MAPFILE), \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LIBS := $(JDKLIB_LIBS), \
+     LIBS_solaris := -lc, \
+-    LIBS_windows := netapi32.lib user32.lib mpr.lib advapi32.lib $(JDKLIB_LIBS), \
++    LIBS_windows := netapi32.lib user32.lib mpr.lib advapi32.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=$(LIBJAAS_NAME).dll" \
+diff -r 65464a307408 make/lib/NetworkingLibraries.gmk
+--- a/make/lib/NetworkingLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/NetworkingLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -25,6 +25,14 @@
+ 
+ LIBNET_SRC_DIRS := $(call FindSrcDirsForLib, java.base, net)
+ 
++ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        LIBNET_LDFLAGS_windows := -delayload:secur32.dll -delayload:iphlpapi.dll
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBNET_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
++    endif
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBNET, \
+     LIBRARY := net, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -39,13 +47,13 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libnet/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
+-    LDFLAGS_windows := -delayload:secur32.dll -delayload:iphlpapi.dll, \
++    LDFLAGS_windows := $(LIBNET_LDFLAGS_windows), \
+     LIBS_unix := -ljvm -ljava, \
+     LIBS_linux := $(LIBDL) -lpthread, \
+     LIBS_solaris := -lnsl -lsocket $(LIBDL) -lc, \
+     LIBS_aix := $(LIBDL),\
+     LIBS_windows := ws2_32.lib jvm.lib secur32.lib iphlpapi.lib winhttp.lib \
+-        delayimp.lib $(WIN_JAVA_LIB) advapi32.lib, \
++        delayimp.lib $(notdir $(WIN_JAVA_LIB)) advapi32.lib, \
+     LIBS_macosx := -framework CoreFoundation -framework CoreServices, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+diff -r 65464a307408 make/lib/NioLibraries.gmk
+--- a/make/lib/NioLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/NioLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -56,6 +56,15 @@
+   BUILD_LIBNIO_MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libnio/mapfile-$(OPENJDK_TARGET_OS)
+ endif
+ 
++
++ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        LIBNIO_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))" /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libnet"
++    else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        LIBNIO_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB)) -L$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libnet
++    endif
++endif
++
+ $(eval $(call SetupNativeCompilation,BUILD_LIBNIO, \
+     LIBRARY := nio, \
+     OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+@@ -68,6 +77,7 @@
+     MAPFILE := $(BUILD_LIBNIO_MAPFILE), \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBNIO_LDFLAGS_windows), \
+     LIBS_unix := -ljava -lnet, \
+     LIBS_linux := -lpthread $(LIBDL), \
+     LIBS_solaris := -ljvm -lsocket -lposix4 $(LIBDL) \
+@@ -75,8 +85,8 @@
+     LIBS_aix := $(LIBDL), \
+     LIBS_macosx := \
+         -framework CoreFoundation -framework CoreServices, \
+-    LIBS_windows := jvm.lib ws2_32.lib $(WIN_JAVA_LIB) \
+-        $(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libnet/net.lib \
++    LIBS_windows := jvm.lib ws2_32.lib $(notdir $(WIN_JAVA_LIB)) \
++        net.lib Mswsock.lib \
+         advapi32.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+diff -r 65464a307408 make/lib/SoundLibraries.gmk
+--- a/make/lib/SoundLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
++++ b/make/lib/SoundLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
+@@ -67,6 +67,11 @@
+       PLATFORM_API_WinOS_Ports.c
+   LIBJSOUND_SRC_FILES += $(LIBJSOUND_MIDIFILES)
+   LIBJSOUND_SRC_FILES += $(LIBJSOUND_PORTFILES)
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBJSOUND_LDFLAGS_windows := /LIBPATH:"$(dir $(JDKLIB_LIBS))"
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBJSOUND_LDFLAGS_windows := -L"$(dir $(JDKLIB_LIBS))"
++  endif
+ endif # OPENJDK_TARGET_OS windows
+ 
+ ifeq ($(OPENJDK_TARGET_OS), linux)
+@@ -126,12 +131,13 @@
+     MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libjsound/mapfile-vers, \
+     LDFLAGS := $(LDFLAGS_JDKLIB) \
+         $(call SET_SHARED_LIBRARY_ORIGIN), \
++    LDFLAGS_windows := $(LIBJSOUND_LDFLAGS_windows), \
+     LIBS_unix := -ljava -ljvm, \
+     LIBS_solaris := -lc, \
+     LIBS_macosx := -framework CoreAudio -framework CoreFoundation \
+         -framework CoreServices -framework AudioUnit $(LIBCXX) \
+         -framework CoreMIDI -framework AudioToolbox, \
+-    LIBS_windows := $(WIN_JAVA_LIB) advapi32.lib winmm.lib, \
++    LIBS_windows := $(notdir $(WIN_JAVA_LIB)) advapi32.lib winmm.lib, \
+     VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+     RC_FLAGS := $(RC_FLAGS) \
+         -D "JDK_FNAME=jsound.dll" \
+@@ -185,10 +191,17 @@
+ 
+ ifneq ($(filter jsoundds, $(EXTRA_SOUND_JNI_LIBS)), )
+ 
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBJSOUNDDS_LDFLAGS_windows := /LIBPATH:"$(dir $(JDKLIB_LIBS))"
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBJSOUNDDS_LDFLAGS_windows := -L"$(dir $(JDKLIB_LIBS))"
++  endif
++
+   $(eval $(call SetupNativeCompilation,BUILD_LIBJSOUNDDS, \
+       LIBRARY := jsoundds, \
+       OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+       SRC := $(LIBJSOUND_SRC_DIRS), \
++      TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+       INCLUDE_FILES := Utilities.c $(LIBJSOUND_DAUDIOFILES) \
+           PLATFORM_API_WinOS_DirectSound.cpp, \
+       OPTIMIZATION := LOW, \
+@@ -197,7 +210,9 @@
+           -DUSE_DAUDIO=TRUE, \
+       LDFLAGS := $(LDFLAGS_JDKLIB) $(LDFLAGS_CXX_JDK) \
+           $(call SET_SHARED_LIBRARY_ORIGIN), \
+-      LIBS := $(JDKLIB_LIBS) dsound.lib winmm.lib user32.lib ole32.lib, \
++      LDFLAGS_windows := $(LIBJSOUNDDS_LDFLAGS_windows), \
++      LIBS := $(JDKLIB_LIBS), \
++      LIBS_windows := dsound.lib winmm.lib user32.lib ole32.lib, \
+       VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
+       RC_FLAGS := $(RC_FLAGS) \
+           -D "JDK_FNAME=jsoundds.dll" \
+diff -r 65464a307408 src/java.base/share/native/libjava/sizecalc.h
+--- a/src/java.base/share/native/libjava/sizecalc.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libjava/sizecalc.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -56,7 +56,7 @@
+ 
+ /* Helper macros */
+ 
+-#ifdef SIZECALC_ALLOC_THROWING_BAD_ALLOC
++#if defined(SIZECALC_ALLOC_THROWING_BAD_ALLOC) && defined(_MSC_VER)
+ #define FAILURE_RESULT throw std::bad_alloc()
+ #else
+ #define FAILURE_RESULT NULL
+diff -r 65464a307408 src/java.base/share/native/libjimage/jimage.cpp
+--- a/src/java.base/share/native/libjimage/jimage.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libjimage/jimage.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -55,7 +55,7 @@
+  *   }
+  *   ...
+  */
+-extern "C" JImageFile* JIMAGE_Open(const char *name, jint* error) {
++extern "C" JNIEXPORT JImageFile* JIMAGE_Open(const char *name, jint* error) {
+     // TODO - return a meaningful error code
+     *error = 0;
+     ImageFileReader* jfile = ImageFileReader::open(name);
+@@ -71,7 +71,7 @@
+  * Ex.
+  *  (*JImageClose)(image);
+  */
+-extern "C" void JIMAGE_Close(JImageFile* image) {
++extern "C" JNIEXPORT void JIMAGE_Close(JImageFile* image) {
+     ImageFileReader::close((ImageFileReader*) image);
+ }
+ 
+@@ -87,7 +87,7 @@
+  *  tty->print_cr(package);
+  *  -> java.base
+  */
+-extern "C" const char* JIMAGE_PackageToModule(JImageFile* image, const char* package_name) {
++extern "C" JNIEXPORT const char* JIMAGE_PackageToModule(JImageFile* image, const char* package_name) {
+     return ((ImageFileReader*) image)->get_image_module_data()->package_to_module(package_name);
+ }
+ 
+@@ -105,7 +105,7 @@
+  *   JImageLocationRef location = (*JImageFindResource)(image,
+  *                                 "java.base", "9.0", "java/lang/String.class", &size);
+  */
+-extern "C" JImageLocationRef JIMAGE_FindResource(JImageFile* image,
++extern "C" JNIEXPORT JImageLocationRef JIMAGE_FindResource(JImageFile* image,
+         const char* module_name, const char* version, const char* name,
+         jlong* size) {
+     // Concatenate to get full path
+@@ -151,7 +151,7 @@
+  *  char* buffer = new char[size];
+  *  (*JImageGetResource)(image, location, buffer, size);
+  */
+-extern "C" jlong JIMAGE_GetResource(JImageFile* image, JImageLocationRef location,
++extern "C" JNIEXPORT jlong JIMAGE_GetResource(JImageFile* image, JImageLocationRef location,
+         char* buffer, jlong size) {
+     ((ImageFileReader*) image)->get_resource((u4) location, (u1*) buffer);
+     return size;
+@@ -179,7 +179,7 @@
+  *   }
+  *   (*JImageResourceIterator)(image, ctw_visitor, loader);
+  */
+-extern "C" void JIMAGE_ResourceIterator(JImageFile* image,
++extern "C" JNIEXPORT void JIMAGE_ResourceIterator(JImageFile* image,
+         JImageResourceVisitor_t visitor, void* arg) {
+     ImageFileReader* imageFile = (ImageFileReader*) image;
+     u4 nEntries = imageFile->table_length();
+@@ -220,7 +220,7 @@
+  *   char path[JIMAGE_MAX_PATH];
+  *    (*JImageResourcePath)(image, location, path, JIMAGE_MAX_PATH);
+  */
+-extern "C" bool JIMAGE_ResourcePath(JImageFile* image, JImageLocationRef locationRef,
++extern "C" JNIEXPORT bool JIMAGE_ResourcePath(JImageFile* image, JImageLocationRef locationRef,
+                                     char* path, size_t max) {
+     ImageFileReader* imageFile = (ImageFileReader*) image;
+ 
+diff -r 65464a307408 src/java.base/share/native/libjimage/jimage.hpp
+--- a/src/java.base/share/native/libjimage/jimage.hpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libjimage/jimage.hpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -72,7 +72,7 @@
+  *   ...
+  */
+ 
+-extern "C" JImageFile* JIMAGE_Open(const char *name, jint* error);
++extern "C" JNIEXPORT JImageFile* JIMAGE_Open(const char *name, jint* error);
+ 
+ typedef JImageFile* (*JImageOpen_t)(const char *name, jint* error);
+ 
+@@ -86,7 +86,7 @@
+  *  (*JImageClose)(image);
+  */
+ 
+-extern "C" void JIMAGE_Close(JImageFile* jimage);
++extern "C" JNIEXPORT void JIMAGE_Close(JImageFile* jimage);
+ 
+ typedef void (*JImageClose_t)(JImageFile* jimage);
+ 
+@@ -104,7 +104,7 @@
+  *  -> java.base
+  */
+ 
+-extern "C" const char * JIMAGE_PackageToModule(JImageFile* jimage, const char* package_name);
++extern "C" JNIEXPORT const char * JIMAGE_PackageToModule(JImageFile* jimage, const char* package_name);
+ 
+ typedef const char* (*JImagePackageToModule_t)(JImageFile* jimage, const char* package_name);
+ 
+@@ -123,7 +123,7 @@
+  *   JImageLocationRef location = (*JImageFindResource)(image,
+  *                                "java.base", "9.0", "java/lang/String.class", &size);
+  */
+-extern "C" JImageLocationRef JIMAGE_FindResource(JImageFile* jimage,
++extern "C" JNIEXPORT JImageLocationRef JIMAGE_FindResource(JImageFile* jimage,
+         const char* module_name, const char* version, const char* name,
+         jlong* size);
+ 
+@@ -147,7 +147,7 @@
+  *  char* buffer = new char[size];
+  *  (*JImageGetResource)(image, location, buffer, size);
+  */
+-extern "C" jlong JIMAGE_GetResource(JImageFile* jimage, JImageLocationRef location,
++extern "C" JNIEXPORT jlong JIMAGE_GetResource(JImageFile* jimage, JImageLocationRef location,
+         char* buffer, jlong size);
+ 
+ typedef jlong(*JImageGetResource_t)(JImageFile* jimage, JImageLocationRef location,
+@@ -181,7 +181,7 @@
+         const char* module_name, const char* version, const char* package,
+         const char* name, const char* extension, void* arg);
+ 
+-extern "C" void JIMAGE_ResourceIterator(JImageFile* jimage,
++extern "C" JNIEXPORT void JIMAGE_ResourceIterator(JImageFile* jimage,
+         JImageResourceVisitor_t visitor, void *arg);
+ 
+ typedef void (*JImageResourceIterator_t)(JImageFile* jimage,
+@@ -197,7 +197,7 @@
+  *   char path[JIMAGE_MAX_PATH];
+  *    (*JImageResourcePath)(image, location, path, JIMAGE_MAX_PATH);
+  */
+-extern "C" bool JIMAGE_ResourcePath(JImageFile* image, JImageLocationRef locationRef,
++extern "C" bool JNIEXPORT JIMAGE_ResourcePath(JImageFile* image, JImageLocationRef locationRef,
+                                     char* path, size_t max);
+ 
+ typedef bool (*JImage_ResourcePath_t)(JImageFile* jimage, JImageLocationRef location,
+diff -r 65464a307408 src/java.base/share/native/libverify/check_code.c
+--- a/src/java.base/share/native/libverify/check_code.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libverify/check_code.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -1390,6 +1390,7 @@
+     case JVM_OPC_invokedynamic:
+         CCerror(context,
+                 "invokedynamic bytecode is not supported in this class file version");
++                __attribute__ ((fallthrough));
+ 
+     case JVM_OPC_instanceof:
+     case JVM_OPC_checkcast:
+diff -r 65464a307408 src/java.base/share/native/libzip/CRC32.c
+--- a/src/java.base/share/native/libzip/CRC32.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libzip/CRC32.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -54,7 +54,7 @@
+     return crc;
+ }
+ 
+-jint JNICALL
++JNIEXPORT jint JNICALL
+ ZIP_CRC32(jint crc, const jbyte *buf, jint len)
+ {
+     return crc32(crc, (Bytef*)buf, len);
+diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
+--- a/src/java.base/share/native/libzip/zip_util.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libzip/zip_util.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -881,7 +881,7 @@
+  * set to the error message text if msg != 0. Otherwise, *msg will be
+  * set to NULL. Caller doesn't need to free the error message.
+  */
+-jzfile * JNICALL
++jzfile * JNIEXPORT
+ ZIP_Open(const char *name, char **pmsg)
+ {
+     jzfile *file = ZIP_Open_Generic(name, pmsg, O_RDONLY, 0);
+@@ -895,7 +895,7 @@
+ /*
+  * Closes the specified zip file object.
+  */
+-void JNICALL
++void JNIEXPORT
+ ZIP_Close(jzfile *zip)
+ {
+     MLOCK(zfiles_lock);
+@@ -1094,7 +1094,7 @@
+  * jzentry for each zip.  This optimizes a common access pattern.
+  */
+ 
+-void JNICALL
++void JNIEXPORT
+ ZIP_FreeEntry(jzfile *jz, jzentry *ze)
+ {
+     jzentry *last;
+@@ -1238,7 +1238,7 @@
+  * Returns the n'th (starting at zero) zip file entry, or NULL if the
+  * specified index was out of range.
+  */
+-jzentry * JNICALL
++jzentry * JNIEXPORT
+ ZIP_GetNextEntry(jzfile *zip, jint n)
+ {
+     jzentry *result;
+@@ -1439,7 +1439,7 @@
+  * The current implementation does not support reading an entry that
+  * has the size bigger than 2**32 bytes in ONE invocation.
+  */
+-jzentry * JNICALL
++jzentry * JNIEXPORT
+ ZIP_FindEntry(jzfile *zip, char *name, jint *sizeP, jint *nameLenP)
+ {
+     jzentry *entry = ZIP_GetEntry(zip, name, 0);
+@@ -1456,7 +1456,7 @@
+  * Note: this is called from the separately delivered VM (hotspot/classic)
+  * so we have to be careful to maintain the expected behaviour.
+  */
+-jboolean JNICALL
++jboolean JNIEXPORT
+ ZIP_ReadEntry(jzfile *zip, jzentry *entry, unsigned char *buf, char *entryname)
+ {
+     char *msg;
+@@ -1515,7 +1515,7 @@
+     return JNI_TRUE;
+ }
+ 
+-jboolean JNICALL
++jboolean JNIEXPORT
+ ZIP_InflateFully(void *inBuf, jlong inLen, void *outBuf, jlong outLen, char **pmsg)
+ {
+     z_stream strm;
+diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.h
+--- a/src/java.base/share/native/libzip/zip_util.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libzip/zip_util.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -239,16 +239,16 @@
+  */
+ #define ZIP_ENDCHAIN ((jint)-1)
+ 
+-jzentry * JNICALL
++jzentry * JNIEXPORT
+ ZIP_FindEntry(jzfile *zip, char *name, jint *sizeP, jint *nameLenP);
+ 
+-jboolean JNICALL
++jboolean JNIEXPORT
+ ZIP_ReadEntry(jzfile *zip, jzentry *entry, unsigned char *buf, char *entrynm);
+ 
+-jzentry * JNICALL
++jzentry * JNIEXPORT
+ ZIP_GetNextEntry(jzfile *zip, jint n);
+ 
+-jzfile * JNICALL
++jzfile * JNIEXPORT
+ ZIP_Open(const char *name, char **pmsg);
+ 
+ jzfile *
+@@ -263,19 +263,19 @@
+ jzfile *
+ ZIP_Put_In_Cache0(const char *name, ZFILE zfd, char **pmsg, jlong lastModified, jboolean usemmap);
+ 
+-void JNICALL
++void JNIEXPORT
+ ZIP_Close(jzfile *zip);
+ 
+ jzentry * ZIP_GetEntry(jzfile *zip, char *name, jint ulen);
+ void ZIP_Lock(jzfile *zip);
+ void ZIP_Unlock(jzfile *zip);
+ jint ZIP_Read(jzfile *zip, jzentry *entry, jlong pos, void *buf, jint len);
+-void JNICALL
++void JNIEXPORT
+ ZIP_FreeEntry(jzfile *zip, jzentry *ze);
+ jlong ZIP_GetEntryDataOffset(jzfile *zip, jzentry *entry);
+ jzentry * ZIP_GetEntry2(jzfile *zip, char *name, jint ulen, jboolean addSlash);
+ 
+-jboolean JNICALL
++jboolean JNIEXPORT
+ ZIP_InflateFully(void *inBuf, jlong inLen, void *outBuf, jlong outLen, char **pmsg);
+ 
+ #endif /* !_ZIP_H_ */
+diff -r 65464a307408 src/java.base/windows/native/libjava/ProcessEnvironment_md.c
+--- a/src/java.base/windows/native/libjava/ProcessEnvironment_md.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libjava/ProcessEnvironment_md.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -59,11 +59,11 @@
+             ;
+ 
+     if ((bytes = (*env)->NewByteArray(env, i)) == NULL) {
+-        FreeEnvironmentStringsA(blockA);
++        FreeEnvironmentStringsA((LPCH)blockA);
+         return NULL;
+     }
+     (*env)->SetByteArrayRegion(env, bytes, 0, i, blockA);
+-    FreeEnvironmentStringsA(blockA);
++    FreeEnvironmentStringsA((LPCH)blockA);
+     return (*env)->NewObject(env, string_class,
+                              String_init_ID, bytes);
+ }
+diff -r 65464a307408 src/java.base/windows/native/libjava/ProcessHandleImpl_win.c
+--- a/src/java.base/windows/native/libjava/ProcessHandleImpl_win.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libjava/ProcessHandleImpl_win.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -31,6 +31,7 @@
+ #include "java_lang_ProcessHandleImpl_Info.h"
+ 
+ #include <windows.h>
++#include <winbase.h>
+ #include <tlhelp32.h>
+ #include <sddl.h>
+ 
+@@ -473,7 +474,7 @@
+     int bufsize = sizeof exeName;
+     jstring commandObj;
+ 
+-    if (QueryFullProcessImageName(handle, 0,  exeName, &bufsize)) {
++    if (QueryFullProcessImageName(handle, 0,  exeName,(PDWORD)&bufsize)) {
+         commandObj = (*env)->NewStringUTF(env, exeName);
+         CHECK_NULL(commandObj);
+         (*env)->SetObjectField(env, jinfo,
+diff -r 65464a307408 src/java.base/windows/native/libjava/io_util_md.c
+--- a/src/java.base/windows/native/libjava/io_util_md.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libjava/io_util_md.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -223,7 +223,7 @@
+     return pathbuf;
+ }
+ 
+-FD
++JNIEXPORT FD
+ winFileHandleOpen(JNIEnv *env, jstring path, int flags)
+ {
+     const DWORD access =
+@@ -559,7 +559,7 @@
+     return 0;
+ }
+ 
+-jlong
++JNIEXPORT jlong
+ handleLseek(FD fd, jlong offset, jint whence)
+ {
+     LARGE_INTEGER pos, distance;
+diff -r 65464a307408 src/java.base/windows/native/libjava/java_props_md.c
+--- a/src/java.base/windows/native/libjava/java_props_md.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libjava/java_props_md.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -208,22 +208,27 @@
+     static WCHAR *u_path = NULL;
+     if (u_path == NULL) {
+         HRESULT hr;
++        KNOWNFOLDERID FOLDERID_Profile;
+ 
+         /*
+          * SHELL32 DLL is delay load DLL and we can use the trick with
+          * __try/__except block.
+          */
++        #if defined(_WIN32) && !defined(__MINGW32__)
+         __try {
++        #endif
+             /*
+              * For Windows Vista and later (or patched MS OS) we need to use
+              * [SHGetKnownFolderPath] call to avoid MAX_PATH length limitation.
+              * Shell32.dll (version 6.0.6000 or later)
+              */
+             hr = SHGetKnownFolderPath(&FOLDERID_Profile, KF_FLAG_DONT_VERIFY, NULL, &u_path);
++        #if defined(_WIN32) && !defined(__MINGW32__)
+         } __except(EXCEPTION_EXECUTE_HANDLER) {
+             /* Exception: no [SHGetKnownFolderPath] entry */
+             hr = E_FAIL;
+         }
++        #endif
+ 
+         if (FAILED(hr)) {
+             WCHAR path[MAX_PATH+1];
+diff -r 65464a307408 src/java.base/windows/native/libjava/jni_util_md.c
+--- a/src/java.base/windows/native/libjava/jni_util_md.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libjava/jni_util_md.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -74,7 +74,7 @@
+     return;
+ }
+ 
+-size_t
++JNIEXPORT size_t
+ getLastErrorString(char *utf8_jvmErrorMsg, size_t cbErrorMsg)
+ {
+     size_t n = 0;
+@@ -144,7 +144,7 @@
+     return n;
+ }
+ 
+-int
++JNIEXPORT int
+ getErrorString(int err, char *buf, size_t len)
+ {
+     int ret = 0;
+diff -r 65464a307408 src/java.base/windows/native/libnet/Inet6AddressImpl.c
+--- a/src/java.base/windows/native/libnet/Inet6AddressImpl.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libnet/Inet6AddressImpl.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -30,6 +30,18 @@
+ #include "java_net_Inet4AddressImpl.h"
+ #include "java_net_Inet6AddressImpl.h"
+ 
++#if !defined(ICMPV6_ECHO_REPLY)  
++
++    typedef struct icmpv6_echo_reply_lh {
++    IPV6_ADDRESS_EX Address;
++    ULONG Status;
++    unsigned int RoundTripTime;
++    } ICMPV6_ECHO_REPLY_LH, *PICMPV6_ECHO_REPLY_LH;
++    
++    typedef ICMPV6_ECHO_REPLY_LH ICMPV6_ECHO_REPLY;
++    typedef ICMPV6_ECHO_REPLY_LH *PICMPV6_ECHO_REPLY;
++#endif
++
+ /*
+  * Inet6AddressImpl
+  */
+diff -r 65464a307408 src/java.base/windows/native/libnet/NetworkInterface_winXP.c
+--- a/src/java.base/windows/native/libnet/NetworkInterface_winXP.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libnet/NetworkInterface_winXP.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -34,7 +34,7 @@
+  */
+ 
+ extern int enumAddresses_win(JNIEnv *env, netif *netifP, netaddr **netaddrPP);
+-int getAddrsFromAdapter(IP_ADAPTER_ADDRESSES *ptr, netaddr **netaddrPP);
++static int getAddrsFromAdapter(IP_ADAPTER_ADDRESSES *ptr, netaddr **netaddrPP);
+ 
+ #ifdef DEBUG
+ void printnif (netif *nif) {
+diff -r 65464a307408 src/java.desktop/share/native/common/awt/medialib/mlib_sys.c
+--- a/src/java.desktop/share/native/common/awt/medialib/mlib_sys.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/share/native/common/awt/medialib/mlib_sys.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -86,7 +86,7 @@
+ 
+ void *__mlib_malloc(mlib_u32 size)
+ {
+-#if defined(_MSC_VER) || defined(AIX)
++#if defined(_MSC_VER) || defined(AIX) || defined (__MINGW32__)
+   /*
+    * Currently, all MS C compilers for Win32 platforms default to 8 byte
+    * alignment. -- from stdlib.h of MS VC++5.0.
+@@ -99,7 +99,7 @@
+   return valloc(size);
+ #else
+   return (void *) memalign(8, size);
+-#endif /* _MSC_VER */
++#endif /* _MSC_VER || AIX || __MINGW32__ */
+ }
+ 
+ void *__mlib_realloc(void *ptr, mlib_u32 size)
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp
+--- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -47,7 +47,7 @@
+  * factors) used in SetRenderState(), indexed by the rule constants from the
+  * AlphaComposite class.
+  */
+-D3DBlendRule StdBlendRules[] = {
++D3DBlendRule D3StdBlendRules[] = {
+     { D3DBLEND_ZERO,         D3DBLEND_ZERO        }, /* 0 - Nothing      */
+     { D3DBLEND_ZERO,         D3DBLEND_ZERO        }, /* 1 - RULE_Clear   */
+     { D3DBLEND_ONE,          D3DBLEND_ZERO        }, /* 2 - RULE_Src     */
+@@ -1381,9 +1381,9 @@
+         pd3dDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+ 
+         pd3dDevice->SetRenderState(D3DRS_SRCBLEND,
+-                                   StdBlendRules[rule].src);
++                                   D3StdBlendRules[rule].src);
+         pd3dDevice->SetRenderState(D3DRS_DESTBLEND,
+-                                   StdBlendRules[rule].dst);
++                                   D3StdBlendRules[rule].dst);
+     }
+ 
+     extraAlpha = ea;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp
+--- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -27,7 +27,7 @@
+ #include "D3DTextRenderer.h"
+ #include "D3DRenderQueue.h"
+ 
+-void D3DGlyphCache_FlushGlyphVertexCache();
++static void D3DGlyphCache_FlushGlyphVertexCache();
+ 
+ // static
+ HRESULT
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h
+--- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -30,7 +30,7 @@
+ 
+ /* Use THIS_FILE when it is available. */
+ #ifndef THIS_FILE
+-    #define THIS_FILE THIS_FILE
++    #define THIS_FILE __FILE__
+ #endif
+ 
+ #ifdef D3D_PPL_DLL
+@@ -67,7 +67,7 @@
+     #include "Trace.h"
+ 
+     #define DebugPrintD3DError(res, msg) \
+-        J2dTraceLn1(J2D_TRACE_ERROR, "D3D Error: " ## msg ## " res=%d", res)
++        J2dTraceLn1(J2D_TRACE_ERROR, "D3D Error: " msg " res=%d", res)
+ 
+ #endif /*D3D_PPL_DLL*/
+ 
+@@ -92,9 +92,9 @@
+ #define SAFE_PRINTLN(RES) \
+ do {                      \
+     if ((RES)!= NULL) {   \
+-        J2dTraceLn1(J2D_TRACE_VERBOSE, "  " ## #RES ## "=0x%x", (RES)); \
++        J2dTraceLn1(J2D_TRACE_VERBOSE, "  "  #RES  "=0x%x", (RES)); \
+     } else {              \
+-        J2dTraceLn(J2D_TRACE_VERBOSE, "  " ## #RES ## "=NULL"); \
++        J2dTraceLn(J2D_TRACE_VERBOSE, "  "  #RES  "=NULL"); \
+     }                     \
+ } while (0);
+ #else // DEBUG
+@@ -119,12 +119,12 @@
+ 
+ #define RETURN_STATUS_IF_EXP_FAILED(EXPR) \
+     if (FAILED(res = (EXPR))) {                    \
+-        DebugPrintD3DError(res, " " ## #EXPR ## " failed in " ## THIS_FILE); \
++        DebugPrintD3DError(res, " " ## #EXPR ## " failed in " THIS_FILE); \
+         return res;                   \
+     } else do { } while (0)
+ 
+ #define RETURN_STATUS_IF_FAILED(status) \
+     if (FAILED((status))) {                    \
+-        DebugPrintD3DError((status), " failed in " ## THIS_FILE ## ", return;");\
++        DebugPrintD3DError((status), " failed in " THIS_FILE ", return;");\
+         return (status);                   \
+     } else do { } while (0)
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp
+--- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -29,6 +29,11 @@
+ 
+ #include "math.h"
+ 
++#ifndef max
++#define max(a,b) (((a) > (b)) ? (a) : (b))
++#define min(a,b) (((a) < (b)) ? (a) : (b))
++#endif
++
+ // non-texturized macros
+ 
+ #define ADD_VERTEX_XYC(X, Y, VCOLOR) \
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/alloc.h
+--- a/src/java.desktop/windows/native/libawt/windows/alloc.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/alloc.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -36,9 +36,13 @@
+ // By defining std::bad_alloc in a local header file instead of including
+ // the Standard C++ <new> header file, we avoid making awt.dll dependent
+ // on msvcp50.dll. This reduces the size of the JRE by 500kb.
++#if defined(_MSC_VER)
+ namespace std {
+     class bad_alloc {};
+ }
++#else
++#include <new>
++#endif
+ 
+ #define SIZECALC_ALLOC_THROWING_BAD_ALLOC
+ #include "sizecalc.h"
+@@ -83,12 +87,14 @@
+ #error Multiple defintions of CATCH_BAD_ALLOC_RET_NO_JNI
+ #endif
+ 
++#if defined(_MSC_VER)
+ // The unsafe versions of malloc, calloc, and realloc should not be used
+ #define malloc Do_Not_Use_malloc_Use_safe_Malloc_Instead
+ #define calloc Do_Not_Use_calloc_Use_safe_Calloc_Instead
+ #define realloc Do_Not_Use_realloc_Use_safe_Realloc_Instead
+ #define ExceptionOccurred Do_Not_Use_ExceptionOccurred_Use_safe_\
+ ExceptionOccurred_Instead
++#endif //defined(_MSC_VER)
+ 
+ // These three functions throw std::bad_alloc in an out of memory condition
+ // instead of returning 0. safe_Realloc will return 0 if memblock is not
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt.h
+--- a/src/java.desktop/windows/native/libawt/windows/awt.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -324,7 +324,7 @@
+     jsize  m_dwSize;
+     LPWSTR getNonEmptyString() {
+         return (NULL==m_pStr)
+-                ? L""
++                ? (LPWSTR)L""
+                 : m_pStr;
+     }
+ 
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -213,11 +213,11 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(canvas, ret);
+-
++    {
+     AwtCanvas *c = (AwtCanvas*)pData;
+     c->m_eraseBackground = doErase;
+     c->m_eraseBackgroundOnResize = doEraseOnResize;
+-
++    }
+ ret:
+     env->DeleteGlobalRef(canvas);
+     delete sebs;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -205,7 +205,7 @@
+ {
+     int itemHeight =(int)::SendMessage(GetHWnd(), CB_GETITEMHEIGHT, (UINT)0,0);
+     int numItemsToShow = (int)::SendMessage(GetHWnd(), CB_GETCOUNT, 0,0);
+-    numItemsToShow = min(MINIMUM_NUMBER_OF_VISIBLE_ITEMS, numItemsToShow);
++    numItemsToShow = MINIMUM_NUMBER_OF_VISIBLE_ITEMS < numItemsToShow ? MINIMUM_NUMBER_OF_VISIBLE_ITEMS : numItemsToShow;
+ 
+     // drop-down height snaps to nearest line, so add a
+     // fudge factor of 1/2 line to ensure last line shows
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Component.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Component.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Component.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -3538,7 +3538,7 @@
+         } // ctrlIsDown
+     } // modifiers
+ 
+-    WORD wChar[2];
++    WCHAR wChar[2];
+     int converted = 1;
+     UINT ch = ::MapVirtualKeyEx(wkey, 2, GetKeyboardLayout());
+     if (ch & 0x80000000) {
+@@ -6398,10 +6398,11 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtComponent *component = (AwtComponent *)pData;
+ 
+     component->GetInsets(gis->insets);
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+     delete gis;
+@@ -7030,9 +7031,9 @@
+ {
+     TRY;
+ 
+-    return (jboolean)AwtToolkit::GetInstance().SyncCall(
++    return *((jboolean*)AwtToolkit::GetInstance().SyncCall(
+         (void *(*)(void *))AwtComponent::_NativeHandlesWheelScrolling,
+-        env->NewGlobalRef(self));
++        env->NewGlobalRef(self)));
+     // global ref is deleted in _NativeHandlesWheelScrolling
+ 
+     CATCH_BAD_ALLOC_RET(NULL);
+@@ -7051,9 +7052,9 @@
+ 
+     jobject selfGlobalRef = env->NewGlobalRef(self);
+ 
+-    return (jboolean)AwtToolkit::GetInstance().SyncCall(
++    return *((jboolean*)AwtToolkit::GetInstance().SyncCall(
+         (void*(*)(void*))AwtComponent::_IsObscured,
+-        (void *)selfGlobalRef);
++        (void *)selfGlobalRef));
+     // selfGlobalRef is deleted in _IsObscured
+ 
+     CATCH_BAD_ALLOC_RET(NULL);
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Component.h
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Component.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Component.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -446,7 +446,7 @@
+     static void JavaKeyToWindowsKey(UINT javaKey, UINT *windowsKey, UINT *modifiers, UINT originalWindowsKey);
+     static void UpdateDynPrimaryKeymap(UINT wkey, UINT jkeyLegacy, jint keyLocation, UINT modifiers);
+ 
+-    INLINE static void AwtComponent::JavaKeyToWindowsKey(UINT javaKey,
++    INLINE static void JavaKeyToWindowsKey(UINT javaKey,
+                                        UINT *windowsKey, UINT *modifiers)
+     {
+         JavaKeyToWindowsKey(javaKey, windowsKey, modifiers, IGNORE_KEY);
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -683,7 +683,7 @@
+             VERIFY(::DPtoLP(hdc, &p, 1));
+             //In accordance with CreateEnhMetaFile documentation the rectangle have to
+             //be normal (left <= right, top <= bottom)
+-            RECT r = { min(0, p.x), min(0, p.y), max(0, p.x), max(0, p.y) };
++            RECT r = { (0 < p.x ? 0 : p.x), (0 < p.y ? 0 : p.y), (0 > p.x ? 0 : p.x), (0 > p.y ? 0 : p.y) };
+             //Due to inversed row order in source bitmap the destination
+             //height have to be negative.
+             HDC hemfdc = ::CreateEnhMetaFile(NULL, NULL, &r, NULL);
+@@ -743,7 +743,7 @@
+             POINT p = { width, height };
+             VERIFY(::SetMapMode(hdc, MM_HIMETRIC));
+             VERIFY(::DPtoLP(hdc, &p, 1));
+-            RECT r = { min(0, p.x), min(0, p.y), max(0, p.x), max(0, p.y) };
++            RECT r = { (0 < p.x ? 0 : p.x), (0 < p.y ? 0 : p.y), (0 > p.x ? 0 : p.x), (0 > p.y ? 0 : p.y) };
+             HDC hmfdc = ::CreateMetaFile(NULL);
+             if( NULL == hmfdc) {
+                 hr = HRESULT_FROM_WIN32(::GetLastError());
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Debug.h
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Debug.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Debug.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -70,7 +70,9 @@
+         #define THIS_FILE __FILE__
+     #endif
+ 
++#ifdef _MSC_VER
+     #define new         new(THIS_FILE, __LINE__)
++#endif
+ 
+     #define VERIFY(exp)         DASSERT(exp)
+     #define UNIMPLEMENTED()     DASSERT(FALSE)
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -92,7 +92,7 @@
+     JNU_ReleaseStringPlatformChars(env, fileOrUri_j, fileOrUri_c);
+     JNU_ReleaseStringPlatformChars(env, verb_j, verb_c);
+ 
+-    if ((int)retval <= 32) {
++    if (*((int*)retval) <= 32) {
+         // ShellExecute failed.
+         LPTSTR buffer = NULL;
+         int len = ::FormatMessage(
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -559,7 +559,7 @@
+     int cydrag = GetSystemMetrics(SM_CYDRAG);
+     SetIntegerProperty(TEXT("win.drag.width"), cxdrag);
+     SetIntegerProperty(TEXT("win.drag.height"), cydrag);
+-    SetIntegerProperty(TEXT("DnD.gestureMotionThreshold"), max(cxdrag, cydrag)/2);
++    SetIntegerProperty(TEXT("DnD.gestureMotionThreshold"), (cxdrag > cydrag ? cxdrag : cydrag)/2);
+     SetIntegerProperty(TEXT("awt.mouse.numButtons"), AwtToolkit::GetNumberOfButtons());
+ 
+     SetIntegerProperty(TEXT("awt.multiClickInterval"), GetDoubleClickTime());
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -24,10 +24,12 @@
+  */
+ 
+ #pragma push_macro("bad_alloc")
++#if defined(_MSC_VER)
+ //"bad_alloc" would be introduced in STL as "std::zbad_alloc" and discarded by linker
+ //by this action we avoid the conflict with AWT implementation of "bad_alloc"
+ //we need <new> inclusion for STL "new" oprators set.
+ #define bad_alloc zbad_alloc
++#endif // _MSC_VER
+ #include <new>
+ 
+ #if defined(_DEBUG) || defined(DEBUG)
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -27,6 +27,7 @@
+ #include <shlwapi.h>
+ #include <shellapi.h>
+ #include <memory.h>
++#include <string>
+ 
+ #include "awt_DataTransferer.h"
+ #include "awt_Toolkit.h"
+@@ -810,7 +811,7 @@
+     STGMEDIUM stgmedium;
+     OLE_HRT( ExtractNativeData(CF_FILECONTENTS, lIndex, &stgmedium) );
+     OLE_NEXT_TRY
+-        IStreamPtr spSrc;
++        LPSTREAM spSrc;
+         if (TYMED_HGLOBAL == stgmedium.tymed) {
+             OLE_HRT( CreateStreamOnHGlobal(
+                 stgmedium.hGlobal,
+@@ -823,7 +824,7 @@
+         if (NULL == spSrc) {
+             OLE_HRT(E_INVALIDARG);
+         }
+-        IStreamPtr spDst;
++        LPSTREAM spDst;
+         OLE_HRT(SHCreateStreamOnFile(
+             pFileName,
+             STGM_WRITE | STGM_CREATE,
+@@ -839,9 +840,9 @@
+ }
+ 
+ 
+-HRESULT GetTempPathWithSlash(JNIEnv *env, _bstr_t &bsTempPath) /*throws _com_error*/
++HRESULT GetTempPathWithSlash(JNIEnv *env, wchar_t *bsTempPath) /*throws _com_error*/
+ {
+-    static _bstr_t _bsPath;
++    static std::wstring _bsPath;
+ 
+     OLE_TRY
+     if (0 == _bsPath.length()) {
+@@ -863,7 +864,7 @@
+                         (jstring)tempdir
+                     ));
+                     if (jsTempPath) {
+-                        _bsPath = (LPCWSTR)JavaStringBuffer(env, jsTempPath);
++                        _bsPath = (LPWSTR)JavaStringBuffer(env, jsTempPath);
+                         OLE_HRT(SHGetFolderPath(
+                             NULL,
+                             CSIDL_WINDOWS,
+@@ -873,7 +874,7 @@
+                         _tcscat(szPath, _T("\\"));
+                         //Dead environment block leads to fact that windows folder becomes temporary path.
+                         //For example while jtreg execution %TEMP%, %TMP% and etc. aren't defined.
+-                        bSafeEmergency = ( 0 == _tcsicmp(_bsPath, szPath) );
++                        bSafeEmergency = ( 0 == _bsPath.compare(szPath) );
+                     }
+                 }
+             }
+@@ -890,7 +891,7 @@
+         }
+     }
+     OLE_CATCH
+-    bsTempPath = _bsPath;
++    bsTempPath = (LPWSTR)_bsPath.c_str();
+     OLE_RETURN_HR
+ }
+ 
+@@ -909,31 +910,31 @@
+         if (0 == pfgdHead->cItems) {
+             OLE_HRT(E_INVALIDARG);
+         }
+-        IStreamPtr spFileNames;
++        LPSTREAM spFileNames;
+         OLE_HRT( CreateStreamOnHGlobal(
+             NULL,
+             TRUE,
+             &spFileNames
+         ));
+ 
+-        _bstr_t sbTempDir;
++        wchar_t *sbTempDir;
+         OLE_HRT( GetTempPathWithSlash(env, sbTempDir) );
+         FILEDESCRIPTORA *pfgdA = pfgdHead->fgd;
+         FILEDESCRIPTORW *pfgdW = (FILEDESCRIPTORW *)pfgdA;
+         for (UINT i = 0; i < pfgdHead->cItems; ++i) {
+-            _bstr_t stFullName(sbTempDir);
++            std::wstring stFullName(sbTempDir);
+             if(CF_FILEGROUPDESCRIPTORA == fmt) {
+-                stFullName += pfgdA->cFileName; //as CHAR
++                stFullName += (LPCTSTR)pfgdA->cFileName; //as CHAR
+                 ++pfgdA;
+             } else {
+                 stFullName += pfgdW->cFileName; //as WCHAR
+                 ++pfgdW;
+             }
+             OLE_HRT(SaveIndexToFile(
+-                stFullName,
++                stFullName.c_str(),
+                 i));
+             //write to stream with zero terminator
+-            OLE_HRT( spFileNames->Write((LPCTSTR)stFullName, (stFullName.length() + 1)*sizeof(TCHAR), NULL) );
++            OLE_HRT( spFileNames->Write((LPCTSTR)stFullName.c_str(), (stFullName.length() + 1)*sizeof(TCHAR), NULL) );
+         }
+         OLE_HRT( spFileNames->Write(_T(""), sizeof(TCHAR), NULL) );
+         STATSTG st;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Font.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Font.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Font.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -589,7 +589,7 @@
+     jint intWidths[256];
+     memset(intWidths, 0, 256 * sizeof(int));
+     VERIFY(::GetCharWidth(hDC, metrics.tmFirstChar,
+-                          min(metrics.tmLastChar, 255),
++                          (metrics.tmLastChar < 255 ? metrics.tmLastChar : 255),
+                           (int *)&intWidths[metrics.tmFirstChar]));
+     env->SetIntArrayRegion(widths, 0, 256, intWidths);
+     env->SetObjectField(fontMetrics, AwtFont::widthsID, widths);
+@@ -599,16 +599,20 @@
+         ::SelectObject(hDC, awtFont->GetHFont(j));
+         VERIFY(::GetTextMetrics(hDC, &metrics));
+         env->SetIntField(fontMetrics, AwtFont::maxAscentID,
+-                         ascent = max(ascent, metrics.tmAscent));
++                         ascent = (ascent > metrics.tmAscent ? ascent : metrics.tmAscent));
+         env->SetIntField(fontMetrics, AwtFont::maxDescentID,
+-                         descent = max(descent, metrics.tmDescent));
++                         descent = (descent > metrics.tmDescent ? descent :metrics.tmDescent));
+         env->SetIntField(fontMetrics, AwtFont::maxHeightID,
+-                         maxHeight = max(maxHeight,
++                         maxHeight = (maxHeight >
++                                         metrics.tmAscent +
++                                         metrics.tmDescent +
++                                         metrics.tmExternalLeading ? 
++                                         maxHeight :
+                                          metrics.tmAscent +
+                                          metrics.tmDescent +
+                                          metrics.tmExternalLeading));
+         env->SetIntField(fontMetrics, AwtFont::maxAdvanceID,
+-                         maxAdvance = max(maxAdvance, metrics.tmMaxCharWidth));
++                         maxAdvance = (maxAdvance > metrics.tmMaxCharWidth ? maxAdvance : metrics.tmMaxCharWidth));
+     }
+ 
+     VERIFY(::SelectObject(hDC, oldFont));
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -1352,7 +1352,7 @@
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
+     f = (AwtFrame *)pData;
+-    HWND hwnd = f->GetHWnd();
++    HWND hwnd; hwnd = f->GetHWnd();
+     if (::IsWindow(hwnd))
+     {
+         DASSERT(!IsBadReadPtr(f, sizeof(AwtFrame)));
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_List.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_List.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_List.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -824,9 +824,9 @@
+ 
+     jobject selfGlobalRef = env->NewGlobalRef(self);
+ 
+-    return (jint)AwtToolkit::GetInstance().SyncCall(
++    return *((jint*)AwtToolkit::GetInstance().SyncCall(
+         (void *(*)(void *))AwtList::_GetMaxWidth,
+-        (void *)selfGlobalRef);
++        (void *)selfGlobalRef));
+     // selfGlobalRef is deleted in _GetMaxWidth
+ 
+     CATCH_BAD_ALLOC_RET(0);
+@@ -1018,8 +1018,8 @@
+     ses->list = env->NewGlobalRef(self);
+     ses->index = index;
+ 
+-    return (jboolean)AwtToolkit::GetInstance().SyncCall(
+-        (void *(*)(void *))AwtList::_IsSelected, ses);
++    return *((jboolean*)AwtToolkit::GetInstance().SyncCall(
++        (void *(*)(void *))AwtList::_IsSelected, ses));
+     // global ref and ses are deleted in _IsSelected
+ 
+     CATCH_BAD_ALLOC_RET(FALSE);
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -650,7 +650,7 @@
+ 
+     // Square the rectangle, so the check is proportional.
+     int width = rect.right - rect.left;
+-    int diff = max(rect.bottom - rect.top - width, 0) ;
++    int diff = (rect.bottom - rect.top - width > 0 ? rect.bottom - rect.top - width : 0) ;
+     int bottom = diff / 2;
+     rect.bottom -= bottom;
+     rect.top += diff - bottom;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -903,9 +903,9 @@
+  * Copy settings from print dialog & any devmode back into attributes
+  * or properties.
+  */
+-extern "C" {
+-extern void setCapabilities(JNIEnv *env, jobject WPrinterJob, HDC hdc);
+-}
++//extern "C" {
++//extern void setCapabilities(JNIEnv *env, jobject WPrinterJob, HDC hdc);
++//}
+ BOOL AwtPrintControl::UpdateAttributes(JNIEnv *env,
+                                        jobject printCtrl, PRINTDLG &pd) {
+ 
+@@ -1045,7 +1045,7 @@
+         DASSERT(!IsBadReadPtr(devnames, sizeof(DEVNAMES)));
+         LPTSTR lpcNames = (LPTSTR)devnames;
+         LPTSTR pbuf = (_tcslen(lpcNames + devnames->wDeviceOffset) == 0 ?
+-                      TEXT("") : lpcNames + devnames->wDeviceOffset);
++                      (LPTSTR)TEXT("") : lpcNames + devnames->wDeviceOffset);
+         if (pbuf != NULL) {
+             jstring jstr = JNU_NewStringPlatform(env, pbuf);
+             env->CallVoidMethod(printCtrl,
+@@ -1054,7 +1054,7 @@
+             env->DeleteLocalRef(jstr);
+         }
+         pbuf = (_tcslen(lpcNames + devnames->wOutputOffset) == 0 ?
+-                      TEXT("") : lpcNames + devnames->wOutputOffset);
++                      (LPTSTR)TEXT("") : lpcNames + devnames->wOutputOffset);
+         if (pbuf != NULL) {
+             if (wcscmp(pbuf, L"FILE:") == 0) {
+                 pdFlags |= PD_PRINTTOFILE;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h
+--- a/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -132,4 +132,6 @@
+ 
+ };
+ 
++void setCapabilities(JNIEnv *env, jobject WPrinterJob, HDC hdc);
++
+ #endif
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h
+--- a/src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -35,10 +35,10 @@
+ 
+ class AwtPrintDialog {
+ public:
+-    static jfieldID AwtPrintDialog::controlID;
+-    static jfieldID AwtPrintDialog::parentID;
+-    static jfieldID AwtPrintDialog::pageID;
+-    static jmethodID AwtPrintDialog::setHWndMID;
++    static jfieldID controlID;
++    static jfieldID parentID;
++    static jfieldID pageID;
++    static jmethodID setHWndMID;
+ 
+     static BOOL PrintDlg(LPPRINTDLG);
+ 
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -60,8 +60,9 @@
+  * WPrintJob native methods
+  */
+ 
+-extern "C" {
+-
++#if defined(_MSC_VER)
++ extern "C" {
++#endif //_MSC_Ver
+ /*** Private Constants ***/
+ 
+ static char *kJavaIntStr = "I";
+@@ -280,7 +281,7 @@
+                             const RECT *margins, int units);
+ static long convertFromPoints(double value, int units);
+ static double convertToPoints(long value, int units);
+-void setCapabilities(JNIEnv *env, jobject self, HDC printDC);
++//void setCapabilities(JNIEnv *env, jobject self, HDC printDC);
+ static inline WORD getPrintPaperSize(JNIEnv *env, jboolean* err, jobject self);
+ static inline jboolean setPrintPaperSize(JNIEnv *env, jobject self, WORD sz);
+ static jint getIntField(JNIEnv *env, jboolean* err, jobject self, const char *fieldName);
+@@ -608,13 +609,13 @@
+         doIt = JNI_FALSE;
+         goto done;
+     }
+-
++    
+     setup.lpfnPageSetupHook = reinterpret_cast<LPPAGESETUPHOOK>(pageDlgHook);
+     setup.Flags = PSD_ENABLEPAGESETUPHOOK | PSD_MARGINS;
+ 
+     AwtDialog::CheckInstallModalHook();
+ 
+-    BOOL ret = ::PageSetupDlg(&setup);
++    BOOL ret; ret = ::PageSetupDlg(&setup);
+     if (ret) {
+ 
+         jobject paper = getPaper(env, page);
+@@ -698,7 +699,7 @@
+ 
+     AwtDialog::ModalActivateNextWindow(NULL, target, peer);
+ 
+-    HGLOBAL oldG = AwtPrintControl::getPrintHDMode(env, self);
++    HGLOBAL oldG; oldG = AwtPrintControl::getPrintHDMode(env, self);
+     if (setup.hDevMode != oldG) {
+         AwtPrintControl::setPrintHDMode(env, self, setup.hDevMode);
+     }
+@@ -707,7 +708,7 @@
+     if (setup.hDevNames != oldG) {
+         AwtPrintControl::setPrintHDName(env, self, setup.hDevNames);
+     }
+-
++    
+ done:
+     env->DeleteGlobalRef(peerGlobalRef);
+     if (target != NULL) {
+@@ -920,7 +921,7 @@
+     }
+ 
+     JNI_CHECK_NULL_GOTO(printDC, "Invalid printDC", done);
+-
++    {
+     /* We try to mitigate the effects of floating point rounding errors
+      * by only setting a value if it would differ from the value in the
+      * target by at least 0.10 points = 1/720 inches.
+@@ -933,7 +934,7 @@
+     jboolean err;
+     WORD dmPaperSize = getPrintPaperSize(env, &err, self);
+     if (err) goto done;
+-
++    {
+     double ix, iy, iw, ih, pw, ph;
+ 
+     DASSERT(AwtToolkit::MainThread() != ::GetCurrentThreadId());
+@@ -958,7 +959,7 @@
+     iw = env->CallDoubleMethod(origPaper, getID);
+     getID = env->GetMethodID(paperClass, GETIMG_H_STR, GETIMG_H_SIG);
+     JNI_CHECK_NULL_GOTO(getID, "no getH method", done);
+-    ih = env->CallDoubleMethod(origPaper, getID);
++    {ih = env->CallDoubleMethod(origPaper, getID);
+ 
+     matchPaperSize(printDC, hDevMode, hDevNames, pw, ph,
+                    &paperWidth, &paperHeight, &dmPaperSize);
+@@ -1051,14 +1052,14 @@
+     jmethodID setSizeID = env->GetMethodID(paperClass,
+                                         SETSIZE_STR, SETSIZE_SIG);
+     JNI_CHECK_NULL_GOTO(setSizeID, "no setSize method", done);
+-
++    {
+     jmethodID setImageableID = env->GetMethodID(paperClass,
+                                         SETIMAGEABLE_STR, SETIMAGEABLE_SIG);
+     JNI_CHECK_NULL_GOTO(setImageableID, "no setImageable method", done);
+-
++    {
+     env->CallVoidMethod(newPaper, setSizeID, paperWidth, paperHeight);
+     env->CallVoidMethod(newPaper, setImageableID, ix, iy, iw, ih);
+-
++    }}}}}
+ done:
+     /* Free any resources allocated */
+     if (privateDC == TRUE) {
+@@ -4395,4 +4396,6 @@
+     CATCH_BAD_ALLOC;
+ }
+ 
++#if defined(_MSC_Ver)
+ } /* extern "C" */
++#endif //_MSC_Ver
+\ No newline at end of file
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -754,7 +754,7 @@
+  * WTextComponentPeer native methods
+  */
+ 
+-extern "C" {
++//extern "C" {
+ 
+ /*
+  * Class:     sun_awt_windows_WTextComponentPeer
+@@ -1231,4 +1231,4 @@
+     return AwtComponent::WmKeyDown(wkey, repCnt, flags, system);
+ }
+ */
+-} /* extern "C" */
++//} /* extern "C" */
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -788,6 +788,7 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     trayIcon = (AwtTrayIcon *)pData;
+ 
+     BOOL result = trayIcon->SendTrayMessage(jupdate == JNI_TRUE ? NIM_MODIFY : NIM_ADD);
+@@ -795,6 +796,7 @@
+     if (result && jupdate == JNI_FALSE) {
+         trayIcon->SendTrayMessage(NIM_SETVERSION);
+     }
++    }
+ ret:
+     env->DeleteGlobalRef(self);
+     delete uis;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Window.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_Window.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Window.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -1024,10 +1024,11 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtWindow *window = (AwtWindow *)pData;
+ 
+     window->RepositionSecurityWarning(env);
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+     delete rsws;
+@@ -3046,6 +3047,7 @@
+     HWND windowHWnd = 0;
+ 
+     JNI_CHECK_NULL_GOTO(self, "peer", ret);
++    {
+     PDATA pData = JNI_GET_PDATA(self);
+     if (pData == NULL) {
+         env->DeleteGlobalRef(self);
+@@ -3058,7 +3060,7 @@
+     if (::IsWindow(windowHWnd)) {
+         AwtWindow::SetAndActivateModalBlocker(windowHWnd, blockerHWnd);
+     }
+-
++    }
+ ret:
+     env->DeleteGlobalRef(self);
+ 
+@@ -3075,6 +3077,7 @@
+     HWND windowHWnd = 0;
+ 
+     JNI_CHECK_NULL_GOTO(self, "peer", ret);
++    {
+     PDATA pData = JNI_GET_PDATA(self);
+     if (pData == NULL) {
+         env->DeleteGlobalRef(self);
+@@ -3086,7 +3089,7 @@
+     if (::IsWindow(windowHWnd)) {
+         AwtWindow::SetModalBlocker(windowHWnd, NULL);
+     }
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+ }
+@@ -3101,10 +3104,11 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtWindow *window = (AwtWindow *)pData;
+ 
+     window->SetTranslucency(iOpacity, window->isOpaque());
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+     delete os;
+@@ -3120,10 +3124,11 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtWindow *window = (AwtWindow *)pData;
+ 
+     window->SetTranslucency(window->getOpacity(), isOpaque);
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+     delete os;
+@@ -3139,11 +3144,12 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtWindow *window = (AwtWindow *)pData;
+ 
+     window->UpdateWindow(env, data, (int)uws->width, (int)uws->height,
+                          uws->hBitmap);
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+     if (data != NULL) {
+@@ -3163,10 +3169,11 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtWindow *window = (AwtWindow *)pData;
+ 
+     window->setFullScreenExclusiveModeState(state != 0);
+-
++    }
+   ret:
+     env->DeleteGlobalRef(self);
+     delete data;
+@@ -3206,6 +3213,7 @@
+ 
+     PDATA pData;
+     JNI_CHECK_PEER_GOTO(self, ret);
++    {
+     AwtWindow *window = (AwtWindow *)pData;
+ 
+     if (window->m_winSizeMove) {
+@@ -3219,7 +3227,7 @@
+         window->WindowDPIChange(prevScreen, prevScaleX, prevScaleY,
+                                 screen, scaleX, scaleY);
+     }
+-
++    }
+ ret:
+     env->DeleteGlobalRef(self);
+     delete ss;
+@@ -3894,8 +3902,8 @@
+     rfs->component = selfGlobalRef;
+     rfs->isMouseEventCause = isMouseEventCause;
+ 
+-    return (jboolean)AwtToolkit::GetInstance().SyncCall(
+-        (void*(*)(void*))AwtWindow::_RequestWindowFocus, rfs);
++    return *((jboolean*)AwtToolkit::GetInstance().SyncCall(
++        (void*(*)(void*))AwtWindow::_RequestWindowFocus, rfs));
+     // global refs and rfs are deleted in _RequestWindowFocus
+ 
+     CATCH_BAD_ALLOC_RET(JNI_FALSE);
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_new.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_new.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_new.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -59,12 +59,14 @@
+     DASSERT(thread_seeded != TLS_OUT_OF_INDEXES);
+ #endif
+ 
++#if defined (_MSC_VER)
+     // use new handler for operator new and malloc
+     _set_new_mode(1);
+ 
+     // set the function which will be called when operator new or
+     // malloc runs out of memory
+     _set_new_handler((_PNH)NewHandler::handler);
++#endif //_MSC_VER
+ }
+ 
+ // Called when malloc or operator new runs out of memory. We try to
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_ole.cpp
+--- a/src/java.desktop/windows/native/libawt/windows/awt_ole.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_ole.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -32,8 +32,15 @@
+   //inline void DbgOut(LPCTSTR lpStr) { ::OutputDebugString(lpStr); }
+ 
+   //Java debug channel approach
++#if defined(_MSC_VER)
+   inline void DbgOut(LPCTSTR lpStr) { DTRACE_PRINT(_B(lpStr)); }
+-
++#elif defined (__MINGW32__)
++inline void DbgOut(LPCTSTR lpStr) { 
++    int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, lpStr, -1, NULL, 0, NULL, NULL);
++    char* encodedStr = new char[sizeNeeded];
++    WideCharToMultiByte(CP_UTF8, 0, lpStr, -1, encodedStr, sizeNeeded, NULL, NULL);
++    DTRACE_PRINT(_B(encodedStr).c_str()); }
++#endif
+   LPCTSTR CreateTimeStamp(LPTSTR lpBuffer, size_t iBufferSize)
+   {
+         struct _timeb tb;
+diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_ole.h
+--- a/src/java.desktop/windows/native/libawt/windows/awt_ole.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libawt/windows/awt_ole.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -30,6 +30,7 @@
+ #include <ole2.h>
+ #include <comdef.h>
+ #include <comutil.h>
++#include <string>
+ 
+ #ifdef _DEBUG
+     #define _SUN_DEBUG
+@@ -109,7 +110,7 @@
+         _hr_ = fnc;\
+         if (FAILED(_hr_)) {\
+             STRACE1(_T("Error:%08x in ") _T(#fnc),  _hr_);\
+-            _com_raise_error(_hr_);\
++            throw(_hr_);\
+         }
+ 
+ #define OLE_WINERROR2HR(msg, erCode)\
+@@ -119,25 +120,25 @@
+ 
+ #define OLE_THROW_LASTERROR(msg)\
+         OLE_WINERROR2HR(msg, ::GetLastError())\
+-        _com_raise_error(_hr_);
++        throw(_hr_);
+ 
+ #define OLE_CHECK_NOTNULL(x)\
+         if (!(x)) {\
+             STRACE1(_T("Null pointer:") _T(#x));\
+-            _com_raise_error(_hr_ = E_POINTER);\
++            throw(_hr_ = E_POINTER);\
+         }
+ 
+ #define OLE_CHECK_NOTNULLSP(x)\
+         if (!bool(x)) {\
+             STRACE1(_T("Null pointer:") _T(#x));\
+-            _com_raise_error(_hr_ = E_POINTER);\
++            throw(_hr_ = E_POINTER);\
+         }
+ 
+ #define OLE_HRW32(fnc)\
+         _hr_ = fnc;\
+         if (ERROR_SUCCESS != _hr_) {\
+             STRACE1(_T("OSError:%d in ") _T(#fnc),  _hr_);\
+-            _com_raise_error(_hr_ = HRESULT_FROM_WIN32(_hr_));\
++            throw(_hr_ = HRESULT_FROM_WIN32(_hr_));\
+         }
+ 
+ #define OLE_HRW32_BOOL(fnc)\
+@@ -173,8 +174,8 @@
+ #define OLE_RETURN_HR      return _hr_;
+ #define OLE_HR             _hr_
+ 
+-#define _B(x)    _bstr_t(x)
+-#define _BT(x)    (LPCTSTR)_bstr_t(x)
++#define _B(x)    std::string(x)
++#define _BT(x)    (LPCTSTR)std::string(x)
+ #define _V(x)    _variant_t(x)
+ #define _VV(vrt) _variant_t(vrt, false)
+ #define _VE      _variant_t()
+diff -r 65464a307408 src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c
+--- a/src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -149,7 +149,7 @@
+         return;
+     if (splash->currentFrame < 0 || splash->currentFrame >= splash->frameCount)
+         return;
+-    pBmi = (BITMAPV4HEADER *) SAFE_SIZE_STRUCT_ALLOC(alloca, sizeof(BITMAPV4HEADER),
++    pBmi = (BITMAPV4HEADER *) SAFE_SIZE_STRUCT_ALLOC(malloc, sizeof(BITMAPV4HEADER),
+             sizeof(RGBQUAD), numColors);
+     if (!pBmi) {
+         return;
+diff -r 65464a307408 src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c
+--- a/src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c	Fri Oct 27 19:28:57 2017 +0200
+@@ -77,7 +77,7 @@
+ 
+ BOOL PackageConnectLookup(PHANDLE,PULONG);
+ 
+-NTSTATUS ConstructTicketRequest(UNICODE_STRING DomainName,
++static NTSTATUS ConstructTicketRequest(UNICODE_STRING DomainName,
+                                 PKERB_RETRIEVE_TKT_REQUEST *outRequest,
+                                 ULONG *outSize);
+ 
+diff -r 65464a307408 src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp
+--- a/src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -187,13 +187,17 @@
+     char path[_MAX_PATH];
+     char tempPath[_MAX_PATH];
+     // Get the path for %USERPROFILE%
+-    char *profilePath;
++    char profilePath[_MAX_PATH];
+     size_t len;
+-    error = _dupenv_s(&profilePath, &len, "USERPROFILE" );
+-    if (error) {
++
++    DWORD ret = GetEnvironmentVariableA("USERPROFILE",profilePath,_MAX_PATH);
++    if (ret==0 || ret>MAX_PATH){
+         printf("Error fetching USERPROFILE.\n");
+         perror("Error");
+-        return error;
++        return ret;
++    }
++    else{
++        len=ret;
+     }
+     const char acc_props1[] = "\\.accessibility.properties";
+     const char acc_props2[] = "\\.acce$$ibility.properties";
+@@ -214,8 +218,6 @@
+     tempPath[0] = 0;
+     strcat_s(tempPath, _MAX_PATH, profilePath);
+     strcat_s(tempPath, acc_props2);
+-    free(profilePath);
+-    profilePath = 0;
+     // Open the original file.  If it doesn't exist and this is an enable request then create it.
+     error = fopen_s(&origFile, path, "r");
+     if (error) {
+@@ -439,7 +441,7 @@
+     return err;
+ }
+ 
+-void main(int argc, char* argv[]) {
++int main(int argc, char* argv[]) {
+     bool enableWasRequested = false;
+     bool disableWasRequested = false;
+     bool badParams = true;
+@@ -492,4 +494,5 @@
+             exit(error);
+         }
+     }
++    return 0;
+ }
+diff -r 65464a307408 src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp
+--- a/src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -527,7 +527,7 @@
+         tvi.mask = TVIF_PARAM | TVIF_TEXT;
+         tvi.pszText = (char *) s; // Accessible name and role
+         tvi.cchTextMax = (int)strlen(s);
+-        tvi.lParam = (long) newNode; // Accessibility information
++        tvi.lParam = (intptr_t) newNode; // Accessibility information
+ 
+         TVINSERTSTRUCT tvis;
+         tvis.hParent = treeNodeParent;
+@@ -550,7 +550,7 @@
+         tvi.mask = TVIF_PARAM | TVIF_TEXT;  // text and lParam are only valid parts
+         tvi.pszText = (char *) s;
+         tvi.cchTextMax = (int)strlen(s);
+-        tvi.lParam = (long) newNode;
++        tvi.lParam = (intptr_t) newNode;
+ 
+         TVINSERTSTRUCT tvis;
+         tvis.hParent = treeNodeParent;
+diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp
+--- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -197,7 +197,7 @@
+     event_struct->winAccessBridgeWindow = ABHandleToLong(winAccessBridgeWindow);
+     if(!JavaBridgeThreadId)
+         {
+-            HANDLE JavaBridgeThreadHandle = BeginThread(JavaBridgeThread,&JavaBridgeThreadId,(DWORD)event_struct);
++            HANDLE JavaBridgeThreadHandle = BeginThread(JavaBridgeThread,&JavaBridgeThreadId,static_cast<DWORD>(reinterpret_cast<uintptr_t>(event_struct)));
+             CloseHandle(JavaBridgeThreadHandle);
+         }
+     PostThreadMessage(JavaBridgeThreadId,WM_USER,(WPARAM)event_struct,0);
+diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp
+--- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -983,7 +983,7 @@
+     if (setTextContentsMethod != (jmethodID) 0) {
+ 
+         // create a Java String for the text
+-        jstring textString = jniEnv->NewString(text, (jsize)wcslen(text));
++        jstring textString = jniEnv->NewString(reinterpret_cast<const jchar*>(text), (jsize)wcslen(text));
+         if (textString == 0) {
+             PrintDebugString("\r    NewString failed");
+             return FALSE;
+@@ -1019,7 +1019,7 @@
+ 
+     if (getParentWithRoleMethod != (jmethodID) 0) {
+         // create a Java String for the role
+-        jstring roleName = jniEnv->NewString(role, (jsize)wcslen(role));
++        jstring roleName = jniEnv->NewString(reinterpret_cast<const jchar*>(role), (jsize)wcslen(role));
+         if (roleName == 0) {
+             PrintDebugString("    NewString failed");
+             return FALSE;
+@@ -1089,7 +1089,7 @@
+     if (getParentWithRoleElseRootMethod != (jmethodID) 0) {
+ 
+         // create a Java String for the role
+-        jstring roleName = jniEnv->NewString(role, (jsize)wcslen(role));
++        jstring roleName = jniEnv->NewString(reinterpret_cast<const jchar*>(role), (jsize)wcslen(role));
+         if (roleName == 0) {
+             PrintDebugString("\r    NewString failed");
+             return FALSE;
+@@ -1219,7 +1219,7 @@
+             wcsncpy(name, stringBytes, nameSize - 1);
+             length = jniEnv->GetStringLength(js);
+             EXCEPTION_CHECK("Getting AccessibleName - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleName - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod (
+                 accessBridgeObject,
+@@ -1384,7 +1384,7 @@
+                 test_attributes.fullAttributesString[length < (sizeof(test_attributes.fullAttributesString) / sizeof(wchar_t)) ?
+                                                      length : (sizeof(test_attributes.fullAttributesString) / sizeof(wchar_t))-2] = (wchar_t) 0;
+                 EXCEPTION_CHECK("Getting AccessibleAttributesAtIndex - call to GetStringLength()", FALSE);
+-                jniEnv->ReleaseStringChars(js, stringBytes);
++                JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+                 EXCEPTION_CHECK("Getting AccessibleAttributesAtIndex - call to ReleaseStringChars()", FALSE);
+                 jniEnv->CallVoidMethod(accessBridgeObject,
+                                        decrementReferenceMethod, js);
+@@ -1563,7 +1563,7 @@
+                     sizeof(info->bridgeWinDLLVersion)  / sizeof(wchar_t));
+             info->bridgeWinDLLVersion[length < (sizeof(info->bridgeWinDLLVersion) / sizeof(wchar_t)) ?
+                                          length : (sizeof(info->bridgeWinDLLVersion) / sizeof(wchar_t))-2] = (wchar_t) 0;
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting JavaVersionProperty - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -1741,7 +1741,7 @@
+             info->name[length < (sizeof(info->name) / sizeof(wchar_t)) ?
+                        length : (sizeof(info->name) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleName - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleName - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -1773,7 +1773,7 @@
+             info->description[length < (sizeof(info->description) / sizeof(wchar_t)) ?
+                               length : (sizeof(info->description) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleName - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleName - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -1805,7 +1805,7 @@
+             info->role[length < (sizeof(info->role) / sizeof(wchar_t)) ?
+                        length : (sizeof(info->role) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleRole - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleRole - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -1837,7 +1837,7 @@
+             info->role_en_US[length < (sizeof(info->role_en_US) / sizeof(wchar_t)) ?
+                              length : (sizeof(info->role_en_US) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleRole_en_US - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleRole_en_US - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -1868,7 +1868,7 @@
+             info->states[length < (sizeof(info->states) / sizeof(wchar_t)) ?
+                          length : (sizeof(info->states) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleState - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleState - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -1899,7 +1899,7 @@
+             info->states_en_US[length < (sizeof(info->states_en_US) / sizeof(wchar_t)) ?
+                                length : (sizeof(info->states_en_US) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleState_en_US - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleState_en_US - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -2815,7 +2815,7 @@
+             relationSet->relations[i].key [length < (sizeof(relationSet->relations[i].key ) / sizeof(wchar_t)) ?
+                                            length : (sizeof(relationSet->relations[i].key ) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleRelation key - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleRelation key - call to ReleaseStringChars()", FALSE);
+             // jniEnv->CallVoidMethod(accessBridgeObject,
+             //                        decrementReferenceMethod, js);
+@@ -2919,7 +2919,7 @@
+             }
+             hypertext->links[i].text[length] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleHyperlink text - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleHyperlink text - call to ReleaseStringChars()", FALSE);
+             // jniEnv->CallVoidMethod(accessBridgeObject,
+             //                                     decrementReferenceMethod, js);
+@@ -3056,7 +3056,7 @@
+             }
+             hypertext->links[bufIndex].text[length] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleHyperlink text - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleHyperlink text - call to ReleaseStringChars()", FALSE);
+             // jniEnv->CallVoidMethod(accessBridgeObject,
+             //                        decrementReferenceMethod, js);
+@@ -3175,7 +3175,7 @@
+         }
+         info->text[length] = (wchar_t) 0;
+         EXCEPTION_CHECK("Getting AccessibleHyperlink text - call to GetStringLength()", FALSE);
+-        jniEnv->ReleaseStringChars(js, stringBytes);
++        JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+         EXCEPTION_CHECK("Getting AccessibleHyperlink text - call to ReleaseStringChars()", FALSE);
+         // jniEnv->CallVoidMethod(accessBridgeObject,
+         //                        decrementReferenceMethod, js);
+@@ -3303,7 +3303,7 @@
+             }
+             icons->iconInfo[i].description[length] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleIcon description - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleIcon description - call to ReleaseStringChars()", FALSE);
+             // jniEnv->CallVoidMethod(accessBridgeObject,
+             //                        decrementReferenceMethod, js);
+@@ -3382,7 +3382,7 @@
+             }
+             actions->actionInfo[i].name [length] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleAction name  - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleAction name  - call to ReleaseStringChars()", FALSE);
+             // jniEnv->CallVoidMethod(accessBridgeObject,
+             //                        decrementReferenceMethod, js);
+@@ -3421,7 +3421,7 @@
+ 
+         // create a Java String for the action name
+         wchar_t *actionName = (wchar_t *)actionsToDo->actions[i].name;
+-        jstring javaName = jniEnv->NewString(actionName, (jsize)wcslen(actionName));
++        jstring javaName = jniEnv->NewString(reinterpret_cast<const jchar*>(actionName), (jsize)wcslen(actionName));
+         if (javaName == 0) {
+             PrintDebugString("\r    NewString failed");
+             *failure = i;
+@@ -3531,7 +3531,7 @@
+             stringBytes = (const wchar_t *) jniEnv->GetStringChars(js, 0);
+             EXCEPTION_CHECK("Getting AccessibleLetterAtIndex - call to GetStringChars()", FALSE);
+             textItems->letter = stringBytes[0];
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleLetterAtIndex - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -3564,7 +3564,7 @@
+             textItems->word[length < (sizeof(textItems->word) / sizeof(wchar_t)) ?
+                             length : (sizeof(textItems->word) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleWordAtIndex - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleWordAtIndex - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -3600,7 +3600,7 @@
+                 textItems->sentence[(sizeof(textItems->sentence) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             }
+             EXCEPTION_CHECK("Getting AccessibleSentenceAtIndex - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleSentenceAtIndex - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -3676,7 +3676,7 @@
+             selectionInfo->selectedText[length < (sizeof(selectionInfo->selectedText) / sizeof(wchar_t)) ?
+                                         length : (sizeof(selectionInfo->selectedText) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleTextSelectedText - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleTextSelectedText - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -3893,7 +3893,7 @@
+             attributes->backgroundColor[length < (sizeof(attributes->backgroundColor) / sizeof(wchar_t)) ?
+                                         length : (sizeof(attributes->backgroundColor) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting BackgroundColorFromAttributeSet - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting BackgroundColorFromAttributeSet - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -3930,7 +3930,7 @@
+             attributes->foregroundColor[length < (sizeof(attributes->foregroundColor) / sizeof(wchar_t)) ?
+                                         length : (sizeof(attributes->foregroundColor) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting ForegroundColorFromAttributeSet - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting ForegroundColorFromAttributeSet - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -3967,7 +3967,7 @@
+             attributes->fontFamily[length < (sizeof(attributes->fontFamily) / sizeof(wchar_t)) ?
+                                    length : (sizeof(attributes->fontFamily) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting FontFamilyFromAttributeSet - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting FontFamilyFromAttributeSet - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -4173,7 +4173,7 @@
+             attributes->fullAttributesString[length < (sizeof(attributes->fullAttributesString) / sizeof(wchar_t)) ?
+                                              length : (sizeof(attributes->fullAttributesString) / sizeof(wchar_t))-2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting AccessibleAttributesAtIndex - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleAttributesAtIndex - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -4416,7 +4416,7 @@
+             text[length < len ? length : len - 2] = (wchar_t) 0;
+             wPrintDebugString(L"  Accessible Text 'text' after null termination = %ls", text);
+             EXCEPTION_CHECK("Getting AccessibleTextRange - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting AccessibleTextRange - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -4461,7 +4461,7 @@
+             length = jniEnv->GetStringLength(js);
+             value[length < len ? length : len - 2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting CurrentAccessibleValue - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting CurrentAccessibleValue - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -4504,7 +4504,7 @@
+             length = jniEnv->GetStringLength(js);
+             value[length < len ? length : len - 2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting MaximumAccessibleValue - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting MaximumAccessibleValue - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+@@ -4547,7 +4547,7 @@
+             length = jniEnv->GetStringLength(js);
+             value[length < len ? length : len - 2] = (wchar_t) 0;
+             EXCEPTION_CHECK("Getting MinimumAccessibleValue - call to GetStringLength()", FALSE);
+-            jniEnv->ReleaseStringChars(js, stringBytes);
++            JNU_ReleaseStringPlatformChars(jniEnv, js, stringBytes);
+             EXCEPTION_CHECK("Getting MinimumAccessibleValue - call to ReleaseStringChars()", FALSE);
+             jniEnv->CallVoidMethod(accessBridgeObject,
+                                    decrementReferenceMethod, js);
+diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h
+--- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -32,6 +32,11 @@
+ #include <windows.h>
+ #include <jni.h>
+ 
++// Borrow some macros from awt.h
++#define JNU_NewStringPlatform(env, x) env->NewString(reinterpret_cast<jchar*>(x), static_cast<jsize>(_tcslen(x)))
++#define JNU_GetStringPlatformChars(env, x, y) reinterpret_cast<LPCWSTR>(env->GetStringChars(x, y))
++#define JNU_ReleaseStringPlatformChars(env, x, y) env->ReleaseStringChars(x, reinterpret_cast<const jchar*>(y))
++
+ #ifndef __AccessBridgeJavaEntryPoints_H__
+ #define __AccessBridgeJavaEntryPoints_H__
+ 
+diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp
+--- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -1726,7 +1726,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyCaretChangePackage *pkg = (PropertyCaretChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyCaretChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -1781,7 +1781,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyDescriptionChangePackage *pkg = (PropertyDescriptionChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyDescriptionChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -1813,7 +1813,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->oldDescription, stringBytes, (sizeof(pkg->oldDescription) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(oldValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, oldValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->oldDescription, L"(null)", (sizeof(pkg->oldDescription) / sizeof(wchar_t)));
+             }
+@@ -1830,7 +1830,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->newDescription, stringBytes, (sizeof(pkg->newDescription) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(newValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, newValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->newDescription, L"(null)", (sizeof(pkg->newDescription) / sizeof(wchar_t)));
+             }
+@@ -1867,7 +1867,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyNameChangePackage *pkg = (PropertyNameChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyNameChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -1899,7 +1899,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->oldName, stringBytes, (sizeof(pkg->oldName) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(oldValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, oldValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->oldName, L"(null)", (sizeof(pkg->oldName) / sizeof(wchar_t)));
+             }
+@@ -1916,7 +1916,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->newName, stringBytes, (sizeof(pkg->newName) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(newValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, newValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->newName, L"(null)", (sizeof(pkg->newName) / sizeof(wchar_t)));
+             }
+@@ -1951,7 +1951,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertySelectionChangePackage *pkg = (PropertySelectionChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertySelectionChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2004,7 +2004,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyStateChangePackage *pkg = (PropertyStateChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyStateChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2036,7 +2036,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->oldState, stringBytes, (sizeof(pkg->oldState) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(oldValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, oldValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->oldState, L"(null)", (sizeof(pkg->oldState) / sizeof(wchar_t)));
+             }
+@@ -2053,7 +2053,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->newState, stringBytes, (sizeof(pkg->newState) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(newValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, newValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->newState, L"(null)", (sizeof(pkg->newState) / sizeof(wchar_t)));
+             }
+@@ -2088,7 +2088,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyTextChangePackage *pkg = (PropertyTextChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyTextChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2141,7 +2141,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyValueChangePackage *pkg = (PropertyValueChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyValueChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2173,7 +2173,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->oldValue, stringBytes, (sizeof(pkg->oldValue) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(oldValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, oldValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->oldValue, L"(null)", (sizeof(pkg->oldValue) / sizeof(wchar_t)));
+             }
+@@ -2190,7 +2190,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->newValue, stringBytes, (sizeof(pkg->newValue) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(newValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, newValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->newValue, L"(null)", (sizeof(pkg->newValue) / sizeof(wchar_t)));
+             }
+@@ -2224,7 +2224,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyVisibleDataChangePackage *pkg = (PropertyVisibleDataChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyVisibleDataChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2276,7 +2276,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyChildChangePackage *pkg = (PropertyChildChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyChildChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2334,7 +2334,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyActiveDescendentChangePackage *pkg = (PropertyActiveDescendentChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyActiveDescendentChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2392,7 +2392,7 @@
+     PackageType *type = (PackageType *) buffer;
+     PropertyTableModelChangePackage *pkg = (PropertyTableModelChangePackage *) (buffer + sizeof(PackageType));
+     *type = cPropertyTableModelChangePackage;
+-    pkg->vmID = (long) dialogWindow;
++    pkg->vmID = HandleToLong(dialogWindow);
+ 
+     // make new Global Refs and send events only to those ATs that want 'em
+     AccessBridgeATInstance *ati = ATs;
+@@ -2424,7 +2424,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->oldValue, stringBytes, (sizeof(pkg->oldValue) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(oldValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, oldValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->oldValue, L"(null)", (sizeof(pkg->oldValue) / sizeof(wchar_t)));
+             }
+@@ -2441,7 +2441,7 @@
+                     return;
+                 }
+                 wcsncpy(pkg->newValue, stringBytes, (sizeof(pkg->newValue) / sizeof(wchar_t)));
+-                env->ReleaseStringChars(newValue, stringBytes);
++                JNU_ReleaseStringPlatformChars(env, newValue, stringBytes);
+             } else {
+                 wcsncpy(pkg->newValue, L"(null)", (sizeof(pkg->newValue) / sizeof(wchar_t)));
+             }
+@@ -2483,7 +2483,7 @@
+         PackageType *type = (PackageType *) buffer;                                     \
+         packageStruct *pkg = (packageStruct *) (buffer + sizeof(PackageType));          \
+         *type = packageConstant;                                                        \
+-        pkg->vmID = (long) dialogWindow;                                                \
++        pkg->vmID = HandleToLong(dialogWindow);                                                \
+                                                                                         \
+         /* make new Global Refs, send events only to those ATs that want 'em */         \
+         AccessBridgeATInstance *ati = ATs;                                              \
+@@ -2521,7 +2521,7 @@
+         PackageType *type = (PackageType *) buffer;
+         JavaShutdownPackage *pkg = (JavaShutdownPackage *) (buffer + sizeof(PackageType));
+         *type = cJavaShutdownPackage;
+-        pkg->vmID = (long) dialogWindow;
++        pkg->vmID = HandleToLong(dialogWindow);
+ 
+         /* make new Global Refs, send events only to those ATs that want 'em */
+         AccessBridgeATInstance *ati = ATs;
+@@ -2571,7 +2571,7 @@
+             return;
+         }
+         wPrintJavaDebugString(L"AccessBridge.java: %ls", stringBytes);
+-        env->ReleaseStringChars(debugStr, stringBytes);
++        JNU_ReleaseStringPlatformChars(env, debugStr, stringBytes);
+     }
+ 
+     JNIEXPORT void JNICALL
+@@ -2719,7 +2719,7 @@
+     }
+ 
+     // Get the component
+-    return awt.GetComponent(env, (void *)windowHandle);
++    return awt.GetComponent(env, LongToHandle(windowHandle));
+     }
+ 
+ 
+@@ -2762,7 +2762,7 @@
+         dsi_win = (JAWT_Win32DrawingSurfaceInfo *)dsi->platformInfo;
+ 
+         // Get the window handle
+-        windowHandle = (jint)dsi_win->hwnd;
++        windowHandle = HandleToLong(dsi_win->hwnd);
+ 
+         // Free the drawing surface info
+         ds->FreeDrawingSurfaceInfo(dsi);
+diff -r 65464a307408 src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp
+--- a/src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -860,7 +860,7 @@
+     PackageType *type = (PackageType *) buffer;
+     IsJavaWindowPackage *pkg = (IsJavaWindowPackage *) (buffer + sizeof(PackageType));
+     *type = cIsJavaWindowPackage;
+-    pkg->window = (jint) window;
++    pkg->window = HandleToLong(window);
+ 
+     PrintDebugString("WinAccessBridge::isJavaWindow(%p)", window);
+ 
+@@ -965,7 +965,7 @@
+     PackageType *type = (PackageType *) buffer;
+     GetAccessibleContextFromHWNDPackage *pkg = (GetAccessibleContextFromHWNDPackage *) (buffer + sizeof(PackageType));
+     *type = cGetAccessibleContextFromHWNDPackage;
+-    pkg->window = (jint) window;
++    pkg->window = HandleToLong(window);
+ 
+     PrintDebugString("WinAccessBridge::getAccessibleContextFromHWND(%p, )", window);
+ 
+@@ -1127,7 +1127,7 @@
+     // find vmID, etc. from HWND; ask that VM for the AC w/Focus
+     HWND pkgVMID;
+     if (getAccessibleContextFromHWND(window, (long *)&(pkgVMID), &(pkg->rAccessibleContext)) == TRUE) {
+-        HWND destABWindow = javaVMs->findAccessBridgeWindow((long)pkgVMID);     // ineffecient [[[FIXME]]]
++        HWND destABWindow = javaVMs->findAccessBridgeWindow(HandleToLong(pkgVMID));     // ineffecient [[[FIXME]]]
+         if (sendMemoryPackage(buffer, sizeof(buffer), destABWindow) == TRUE) {
+             *vmID = pkg->rVMID;
+             *AccessibleContext = pkg->rAccessibleContext;
+diff -r 65464a307408 src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp
+--- a/src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -51,10 +51,18 @@
+ #define SIGNATURE_EXCEPTION "java/security/SignatureException"
+ #define OUT_OF_MEMORY_ERROR "java/lang/OutOfMemoryError"
+ 
++#if defined(_MSC_VER)
+ extern "C" {
++#endif //_MSC_VER
++
++#if !defined (_MSC_VER)
++#define __try 
++#define __finally 
++#define __leave 
++#endif // MSC_VER
+ 
+ /*
+- * Declare library specific JNI_Onload entry if static build
++* Declare library specific JNI_Onload entry if static build
+  */
+ DEF_STATIC_JNI_OnLoad
+ 
+@@ -92,7 +100,7 @@
+  * Overloaded 'operator new[]' variant, which will raise Java's
+  * OutOfMemoryError in the case of a failure.
+  */
+-static void* operator new[](std::size_t size, JNIEnv *env)
++void* operator new[](std::size_t size, JNIEnv *env)
+ {
+     void* buf = ::operator new[](size, std::nothrow);
+     if (buf == NULL) {
+@@ -1538,21 +1546,21 @@
+ JNIEXPORT jint JNICALL Java_sun_security_mscapi_KeyStore_getKeyLength
+   (JNIEnv *env, jobject obj, jlong hKey)
+ {
+-    DWORD dwDataLen = sizeof(DWORD);
+-    BYTE pbData[sizeof(DWORD)];
++    DWORD dwDataLen = 0; 
++    DWORD dwKeyLen = 0;
+     DWORD length = 0;
+ 
+     __try
+     {
+         // Get key length (in bits)
+         //TODO - may need to use KP_BLOCKLEN instead?
+-        if (!(::CryptGetKeyParam((HCRYPTKEY) hKey, KP_KEYLEN, (BYTE *)pbData, &dwDataLen,
++        if (!(::CryptGetKeyParam((HCRYPTKEY) hKey, KP_KEYLEN, (BYTE *)&dwKeyLen, &dwDataLen,
+             0))) {
+ 
+             ThrowException(env, KEY_EXCEPTION, GetLastError());
+             __leave;
+         }
+-        length = (DWORD) pbData;
++        length = dwKeyLen;
+     }
+     __finally
+     {
+@@ -2220,4 +2228,6 @@
+     return publicKey;
+ }
+ 
++#if defined(_MSC_VER)
+ } /* extern "C" */
++#endif // _MSC_VER
+\ No newline at end of file
+diff -r 65464a307408 src/jdk.pack/share/native/common-unpack/defines.h
+--- a/src/jdk.pack/share/native/common-unpack/defines.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.pack/share/native/common-unpack/defines.h	Fri Oct 27 19:28:57 2017 +0200
+@@ -25,7 +25,7 @@
+ 
+ // random definitions
+ 
+-#ifdef _MSC_VER
++#if defined(_MSC_VER) || defined (__MINGW32__)
+ #include <windows.h>
+ #include <winuser.h>
+ #else
+@@ -107,7 +107,7 @@
+ typedef unsigned long uLong;
+ #endif
+ #endif
+-#ifdef _MSC_VER
++#if defined(_MSC_VER) || defined(__MINGW32__) 
+ typedef LONGLONG        jlong;
+ typedef DWORDLONG       julong;
+ #define MKDIR(dir)      mkdir(dir)
+diff -r 65464a307408 src/jdk.pack/share/native/common-unpack/zip.cpp
+--- a/src/jdk.pack/share/native/common-unpack/zip.cpp	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/jdk.pack/share/native/common-unpack/zip.cpp	Fri Oct 27 19:28:57 2017 +0200
+@@ -416,10 +416,15 @@
+     ((uLong)h << 11) | ((uLong)m << 5) | ((uLong)s >> 1);
+ }
+ 
++//FIXME: it is a trange conditional: is this really the best way to test? 
+ #ifdef _REENTRANT // solaris
++#if !defined(__MINGW32__)
+ extern "C" struct tm *gmtime_r(const time_t *, struct tm *);
+ #else
+ #define gmtime_r(t, s) gmtime(t)
++#endif //__MINGW32__
++#else
++#define gmtime_r(t, s) gmtime(t)
+ #endif
+ /*
+  * Return the Unix time in DOS format

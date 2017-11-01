@@ -1,0 +1,686 @@
+diff -r a08cbfc0e4ec .hgignore
+--- a/.hgignore	Thu Aug 03 18:56:56 2017 +0000
++++ b/.hgignore	Wed Nov 01 08:51:31 2017 +0100
+@@ -8,3 +8,4 @@
+ .DS_Store
+ .metadata/
+ .recommenders/
++^.vscode/
+diff -r a08cbfc0e4ec common/autoconf/basics.m4
+--- a/common/autoconf/basics.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/basics.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -1228,6 +1228,11 @@
+   AC_MSG_CHECKING([if bash supports errexit (-e)])
+   if ${BASH} -e -c 'true'; then
+     BASH_ARGS="$BASH_ARGS -e"
++    # for building under MSYS2 and using gcc toolchain you need
++    #  additional bash arguments to run proper SHELL
++    if test "x$OPENJDK_BUILD_OS_ENV" = xwindows.msys; then
++        BASH_ARGS="$BASH_ARGS -l -c"
++    fi
+     AC_MSG_RESULT([yes])
+   else
+     AC_MSG_RESULT([no])
+diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
+--- a/common/autoconf/basics_windows.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/basics_windows.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -42,7 +42,7 @@
+     windows_path=`$CYGPATH -m "$unix_path"`
+     $1="$windows_path"
+   elif test "x$OPENJDK_BUILD_OS_ENV" = "xwindows.msys"; then
+-    windows_path=`cmd //c echo $unix_path`
++    windows_path=`MSYS2_ARG_CONV_EXCL= cmd //c echo $unix_path`
+     $1="$windows_path"
+   fi
+ ])
+@@ -136,6 +136,16 @@
+   fi
+ ])
+ 
++AC_DEFUN([BASIC_MSYS_UPDATE_FIXPATH],
++[
++  # Take all collected prefixes and turn them into a -m/c/foo@/c/bar@... command line
++  # @ was chosen as separator to minimize risk of other tools messing around with it
++  all_unique_prefixes=`echo "${all_fixpath_prefixes@<:@@@:>@}" \
++      | tr ' ' '\n' | $GREP '^/./' | $SORT | $UNIQ`
++  fixpath_argument_list=`echo $all_unique_prefixes  | tr ' ' '@'`
++  FIXPATH="$FIXPATH_BIN -m$fixpath_argument_list"
++])
++
+ AC_DEFUN([BASIC_FIXUP_PATH_MSYS],
+ [
+   path="[$]$1"
+@@ -143,7 +153,7 @@
+   new_path="$path"
+   if test "x$has_colon" = x; then
+     # Not in mixed or Windows style, start by that.
+-    new_path=`cmd //c echo $path`
++    new_path=`MSYS2_ARG_CONV_EXCL= cmd //c echo $path`
+   fi
+ 
+   BASIC_MAKE_WINDOWS_SPACE_SAFE_MSYS([$new_path])
+@@ -155,6 +165,8 @@
+ 
+   # Save the first 10 bytes of this path to the storage, so fixpath can work.
+   all_fixpath_prefixes=("${all_fixpath_prefixes@<:@@@:>@}" "${new_path:0:10}")
++  # We might need to re-evaluate FIXPATH.
++  BASIC_MSYS_UPDATE_FIXPATH  
+ ])
+ 
+ AC_DEFUN([BASIC_FIXUP_EXECUTABLE_CYGWIN],
+@@ -293,7 +305,7 @@
+     # Do not save /bin paths to all_fixpath_prefixes!
+   else
+     # Not in mixed or Windows style, start by that.
+-    new_path=`cmd //c echo $new_path`
++    new_path=`MSYS2_ARG_CONV_EXCL= cmd //c echo $new_path`
+     BASIC_MAKE_WINDOWS_SPACE_SAFE_MSYS([$new_path])
+     # Output is in $new_path
+     BASIC_WINDOWS_REWRITE_AS_UNIX_PATH(new_path)
+@@ -302,6 +314,8 @@
+ 
+     # Save the first 10 bytes of this path to the storage, so fixpath can work.
+     all_fixpath_prefixes=("${all_fixpath_prefixes@<:@@@:>@}" "${new_path:0:10}")
++    # We might need to re-evaluate FIXPATH.
++    BASIC_MSYS_UPDATE_FIXPATH    
+   fi
+ ])
+ 
+@@ -380,6 +394,7 @@
+   # @files and rewrites these too! This wrapper binary is
+   # called fixpath.
+   FIXPATH=
++  FIXPATHJ=
+   if test "x$OPENJDK_BUILD_OS" = xwindows; then
+     AC_MSG_CHECKING([if fixpath can be created])
+     FIXPATH_SRC="$SRC_ROOT/common/src/fixpath.c"
+@@ -391,10 +406,14 @@
+     elif test "x$OPENJDK_BUILD_OS_ENV" = xwindows.msys; then
+       # Take all collected prefixes and turn them into a -m/c/foo@/c/bar@... command line
+       # @ was chosen as separator to minimize risk of other tools messing around with it
+-      all_unique_prefixes=`echo "${all_fixpath_prefixes@<:@@@:>@}" \
+-          | tr ' ' '\n' | $GREP '^/./' | $SORT | $UNIQ`
+-      fixpath_argument_list=`echo $all_unique_prefixes  | tr ' ' '@'`
+-      FIXPATH="$FIXPATH_BIN -m$fixpath_argument_list"
++      BASIC_MSYS_UPDATE_FIXPATH
++    fi
++    if test "x$TOOLCHAIN_TYPE" = xgcc; then
++      # gcc toolchain specific flags for fixpath
++      FIXPATH_COMPILE_FLAG="-o "
++    else
++      # Microsoft toolchain specific flags for fixpath
++      FIXPATH_COMPILE_FLAG="-Fe"
+     fi
+     FIXPATH_SRC_W="$FIXPATH_SRC"
+     FIXPATH_BIN_W="$FIXPATH_BIN"
+@@ -403,7 +422,7 @@
+     $RM -rf $FIXPATH_BIN $FIXPATH_DIR
+     $MKDIR -p $FIXPATH_DIR $CONFIGURESUPPORT_OUTPUTDIR/bin
+     cd $FIXPATH_DIR
+-    $CC $FIXPATH_SRC_W -Fe$FIXPATH_BIN_W > $FIXPATH_DIR/fixpath1.log 2>&1
++    $CC $FIXPATH_SRC_W $FIXPATH_COMPILE_FLAG$FIXPATH_BIN_W > $FIXPATH_DIR/fixpath1.log 2>&1
+     cd $CURDIR
+ 
+     if test ! -x $FIXPATH_BIN; then
+@@ -414,7 +433,7 @@
+     AC_MSG_RESULT([yes])
+     AC_MSG_CHECKING([if fixpath.exe works])
+     cd $FIXPATH_DIR
+-    $FIXPATH $CC $FIXPATH_SRC -Fe$FIXPATH_DIR/fixpath2.exe \
++    $FIXPATH $CC $FIXPATH_SRC $FIXPATH_COMPILE_FLAG$FIXPATH_DIR/fixpath2.exe \
+         > $FIXPATH_DIR/fixpath2.log 2>&1
+     cd $CURDIR
+     if test ! -x $FIXPATH_DIR/fixpath2.exe; then
+@@ -424,9 +443,23 @@
+     fi
+     AC_MSG_RESULT([yes])
+ 
+-    FIXPATH_DETACH_FLAG="--detach"
++    if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
++      # Prohibit msys2 path conversion from trying to be "intelligent", and rely
++      # on fixpath instead.
++      export MSYS2_ARG_CONV_EXCL="*"
++      FIXPATH_DETACH_FLAG="--detach"
++    elif test "x$TOOLCHAIN_TYPE" = xgcc; then
++      # for gcc toolchain we don't need FIXPATH for the compiler tasks
++      # only for the JAVA bootJDK tasks.
++      # For JAVA boot JDK tasks disable the automatic argument conversions
++      # and rely solely on FIXPATH
++      FIXPATH_DETACH_FLAG=
++      FIXPATHJ=`echo -e MSYS2_ARG_CONV_EXCL=* $FIXPATH`
++      FIXPATH=
++    fi
+   fi
+ 
+   AC_SUBST(FIXPATH)
++  AC_SUBST(FIXPATHJ)
+   AC_SUBST(FIXPATH_DETACH_FLAG)
+ ])
+diff -r a08cbfc0e4ec common/autoconf/build-aux/config.sub
+--- a/common/autoconf/build-aux/config.sub	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/build-aux/config.sub	Wed Nov 01 08:51:31 2017 +0100
+@@ -30,7 +30,7 @@
+ DIR=`dirname $0`
+ 
+ # First, filter out everything that doesn't begin with "aarch64-"
+-if ! echo $* | grep '^aarch64-' >/dev/null ; then
++if ! echo $* | grep -e '^aarch64-' -e 'msys' >/dev/null ; then
+     . $DIR/autoconf-config.sub "$@"
+     # autoconf-config.sub exits, so we never reach here, but just in
+     # case we do:
+@@ -45,6 +45,10 @@
+             config=`echo $1 | sed 's/^aarch64-/arm-/'`
+             sub_args="$sub_args $config"
+             shift; ;;
++        *-msys )
++            config=`echo $1 | sed 's/msys/mingw32/'`
++            sub_args="$sub_args $config"
++            shift; ;;
+         - )    # Use stdin as input.
+             sub_args="$sub_args $1"
+             shift; break ;;
+diff -r a08cbfc0e4ec common/autoconf/build-performance.m4
+--- a/common/autoconf/build-performance.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/build-performance.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -247,8 +247,16 @@
+       fi
+     fi
+ 
+-    CCACHE="CCACHE_COMPRESS=1 $SET_CCACHE_DIR \
+-        CCACHE_SLOPPINESS=$CCACHE_SLOPPINESS CCACHE_BASEDIR=$TOPDIR $CCACHE"
++    if test "x$OPENJDK_TARGET_OS" = xwindows && test "x$TOOLCHAIN_TYPE" = xgcc; then
++      # For windows ccache base_dir is not working  with absolute source paths
++      # (maybe will be fixed later?) but at this time 
++      # that variable should not be added 
++      CCACHE="CCACHE_COMPRESS=1 $SET_CCACHE_DIR \
++          CCACHE_SLOPPINESS=$CCACHE_SLOPPINESS $CCACHE"
++    else
++      CCACHE="CCACHE_COMPRESS=1 $SET_CCACHE_DIR \
++          CCACHE_SLOPPINESS=$CCACHE_SLOPPINESS CCACHE_BASEDIR=$TOPDIR $CCACHE"
++    fi
+ 
+     if test "x$SET_CCACHE_DIR" != x; then
+       mkdir -p $CCACHE_DIR > /dev/null 2>&1
+diff -r a08cbfc0e4ec common/autoconf/flags.m4
+--- a/common/autoconf/flags.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/flags.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -250,7 +250,9 @@
+     ARFLAGS="-X64"
+   elif test "x$OPENJDK_TARGET_OS" = xwindows; then
+     # lib.exe is used as AR to create static libraries.
+-    ARFLAGS="-nologo -NODEFAULTLIB:MSVCRT"
++    if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
++      ARFLAGS="-nologo -NODEFAULTLIB:MSVCRT"
++    fi
+   else
+     ARFLAGS=""
+   fi
+@@ -268,6 +270,10 @@
+     STRIPFLAGS="-S"
+   elif test "x$OPENJDK_TARGET_OS" = xaix; then
+     STRIPFLAGS="-X32_64"
++  elif test "x$OPENJDK_TARGET_OS" = xwindows; then
++    if test "x$TOOLCHAIN_TYPE" = xgcc; then
++      STRIPFLAGS="--strip-debug"
++    fi
+   fi
+ 
+   AC_SUBST(STRIPFLAGS)
+@@ -295,8 +301,19 @@
+ 
+   # On Windows, we need to set RC flags.
+   if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
++    # Set these flags only for Microsoft/MSVC toolchain
+     RC_FLAGS="-nologo -l0x409"
+     JVM_RCFLAGS="-nologo"
++  fi
++
++  # Set these RC flags for all builds targeting Windows
++  if test "x$OPENJDK_TARGET_OS" = xwindows; then
++    if test "x$TOOLCHAIN_TYPE" = xgcc; then
++      #gcc on MINGW needs COFF resource format
++      RC_FLAGS="$RC_FLAGS -O coff"
++      JVM_RCFLAGS="$JVM_RCFLAGS -O coff"
++    fi
++
+     if test "x$DEBUG_LEVEL" = xrelease; then
+       RC_FLAGS="$RC_FLAGS -DNDEBUG"
+       JVM_RCFLAGS="$JVM_RCFLAGS -DNDEBUG"
+@@ -310,18 +327,18 @@
+     RC_FLAGS="$RC_FLAGS \
+         -D\"JDK_VERSION_STRING=\$(VERSION_STRING)\" \
+         -D\"JDK_COMPANY=\$(COMPANY_NAME)\" \
+-        -D\"JDK_COMPONENT=\$(PRODUCT_NAME) \$(JDK_RC_PLATFORM_NAME) binary\" \
++        -D\"JDK_COMPONENT=\$(PRODUCT_NAME)\x20\$(JDK_RC_PLATFORM_NAME)\x20binary\" \
+         -D\"JDK_VER=\$(VERSION_NUMBER)\" \
+-        -D\"JDK_COPYRIGHT=Copyright \xA9 $COPYRIGHT_YEAR\" \
+-        -D\"JDK_NAME=\$(PRODUCT_NAME) \$(JDK_RC_PLATFORM_NAME) \$(VERSION_MAJOR)\" \
++        -D\"JDK_COPYRIGHT=Copyright\x20\xA9\x20$COPYRIGHT_YEAR\" \
++        -D\"JDK_NAME=\$(PRODUCT_NAME)\x20\$(JDK_RC_PLATFORM_NAME)\x20\$(VERSION_MAJOR)\" \
+         -D\"JDK_FVER=\$(subst .,\$(COMMA),\$(VERSION_NUMBER_FOUR_POSITIONS))\""
+ 
+     JVM_RCFLAGS="$JVM_RCFLAGS \
+         -D\"HS_BUILD_ID=\$(VERSION_STRING)\" \
+         -D\"HS_COMPANY=\$(COMPANY_NAME)\" \
+         -D\"JDK_DOTVER=\$(VERSION_NUMBER_FOUR_POSITIONS)\" \
+-        -D\"HS_COPYRIGHT=Copyright $COPYRIGHT_YEAR\" \
+-        -D\"HS_NAME=\$(PRODUCT_NAME) \$(VERSION_SHORT)\" \
++        -D\"HS_COPYRIGHT=Copyright\x20$COPYRIGHT_YEAR\" \
++        -D\"HS_NAME=\$(PRODUCT_NAME)\x20\$(VERSION_SHORT)\" \
+         -D\"JDK_VER=\$(subst .,\$(COMMA),\$(VERSION_NUMBER_FOUR_POSITIONS))\" \
+         -D\"HS_FNAME=jvm.dll\" \
+         -D\"HS_INTERNAL_NAME=jvm\""
+@@ -359,6 +376,13 @@
+       SET_SHARED_LIBRARY_ORIGIN="$SET_EXECUTABLE_ORIGIN"
+       SET_SHARED_LIBRARY_NAME='-Wl,-install_name,@rpath/[$]1'
+       SET_SHARED_LIBRARY_MAPFILE='-Wl,-exported_symbols_list,[$]1'
++    elif test "x$OPENJDK_TARGET_OS" = xwindows; then
++      # Linking is different on Windows
++      SHARED_LIBRARY_FLAGS='-shared'
++      SET_EXECUTABLE_ORIGIN=''
++      SET_SHARED_LIBRARY_ORIGIN=''
++      SET_SHARED_LIBRARY_NAME=''
++      SET_SHARED_LIBRARY_MAPFILE=''      
+     else
+       # Default works for linux, might work on other platforms as well.
+       SHARED_LIBRARY_FLAGS='-shared'
+@@ -655,11 +679,20 @@
+         C_O_FLAG_NORM="-O2"
+         C_O_FLAG_SIZE="-Os"
+       fi
+-      C_O_FLAG_DEBUG="-O0"
++      if test "x$OPENJDK_TARGET_OS" = xwindows; then
++        # For debug build this seems to be the best optimization flag
++        C_O_FLAG_DEBUG="-Og"
++        # Java VM crashes with gcc 7.2 and -O3 -O2, only -O1 or less seems to work
++        C_O_FLAG_HIGHEST_JVM="-O1"
++      else
++        C_O_FLAG_DEBUG="-O0"
++      fi
+       if test "x$OPENJDK_TARGET_OS" = xmacosx; then
+         C_O_FLAG_DEBUG_JVM=""
+       elif test "x$OPENJDK_TARGET_OS" = xlinux; then
+         C_O_FLAG_DEBUG_JVM="-O0"
++      elif test "x$OPENJDK_TARGET_OS" = xwindows; then
++        C_O_FLAG_DEBUG_JVM="-Og"
+       fi
+       C_O_FLAG_NONE="-O0"
+     elif test "x$TOOLCHAIN_TYPE" = xclang; then
+@@ -859,6 +892,15 @@
+         $2CFLAGS_JDK="${$2CFLAGS_JDK} -fno-strict-aliasing"
+         ;;
+     esac
++    if test "x$OPENJDK_$1_OS" = xwindows; then
++      # At lest Windows 7 needed to compile JDK
++      $2COMMON_CCXXFLAGS_JDK="[$]$2COMMON_CCXXFLAGS_JDK \
++        -fshort-wchar \
++        -DWIN32 -DWINVER=0x0601 -D_WIN32_WINNT=0x0601 \
++        -DWIN32_LEAN_AND_MEAN -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE \
++        -D_WINSOCK_DEPRECATED_NO_WARNINGS -DIA"
++    fi
++
+     TOOLCHAIN_CHECK_COMPILER_VERSION(VERSION: 6, PREFIX: $2, IF_AT_LEAST: FLAGS_SETUP_GCC6_COMPILER_FLAGS($2))
+   elif test "x$TOOLCHAIN_TYPE" = xclang; then
+     $2JVM_CFLAGS="[$]$2JVM_CFLAGS -D_GNU_SOURCE"
+@@ -1008,7 +1050,9 @@
+     $2COMMON_CCXXFLAGS_JDK="[$]$2COMMON_CCXXFLAGS_JDK -D_ALLBSD_SOURCE"
+   elif test "x$OPENJDK_$1_OS" = xwindows; then
+     $2JVM_CFLAGS="[$]$2JVM_CFLAGS -D_WINDOWS -DWIN32 -D_JNI_IMPLEMENTATION_"
+-    $2JVM_CFLAGS="[$]$2JVM_CFLAGS -nologo -W3 -MD -MP"
++    if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
++      $2JVM_CFLAGS="[$]$2JVM_CFLAGS -nologo -W3 -MD -MP"
++    fi
+   fi
+ 
+   # Set some additional per-CPU defines.
+@@ -1296,10 +1340,14 @@
+   elif test "x$OPENJDK_$1_OS" = xbsd; then
+     $2JVM_LIBS="[$]$2JVM_LIBS -lm"
+   elif test "x$OPENJDK_$1_OS" = xwindows; then
+-    $2JVM_LIBS="[$]$2JVM_LIBS kernel32.lib user32.lib gdi32.lib winspool.lib \
+-        comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
+-        wsock32.lib winmm.lib version.lib psapi.lib"
++    if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
++      $2JVM_LIBS="[$]$2JVM_LIBS kernel32.lib user32.lib gdi32.lib winspool.lib \
++          comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib \
++          wsock32.lib winmm.lib version.lib psapi.lib"
++    elif test "x$TOOLCHAIN_TYPE" = xgcc; then
++      $2JVM_LIBS="[$]$2JVM_LIBS -lpsapi -lversion -lwsock32 -lwinmm -lssp"
+     fi
++  fi
+ 
+   # Set $2JVM_ASFLAGS
+   if test "x$OPENJDK_$1_OS" = xlinux; then
+diff -r a08cbfc0e4ec common/autoconf/jdk-options.m4
+--- a/common/autoconf/jdk-options.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/jdk-options.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -324,7 +324,7 @@
+     ZIP_EXTERNAL_DEBUG_SYMBOLS=false
+   elif test "x$NATIVE_DEBUG_SYMBOLS" = xexternal; then
+ 
+-    if test "x$OPENJDK_TARGET_OS" = xsolaris || test "x$OPENJDK_TARGET_OS" = xlinux; then
++    if test "x$OPENJDK_TARGET_OS" = xsolaris || test "x$OPENJDK_TARGET_OS" = xlinux; test "x$OPENJDK_TARGET_OS" = xwindows; then
+       if test "x$OBJCOPY" = x; then
+         # enabling of enable-debug-symbols and can't find objcopy
+         # this is an error
+diff -r a08cbfc0e4ec common/autoconf/lib-std.m4
+--- a/common/autoconf/lib-std.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/lib-std.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -86,7 +86,7 @@
+   AC_SUBST(LIBCXX)
+ 
+   # Setup Windows runtime dlls
+-  if test "x$OPENJDK_TARGET_OS" = "xwindows"; then
++  if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
+     TOOLCHAIN_SETUP_VS_RUNTIME_DLLS
+-  fi
++  fi  
+ ])
+diff -r a08cbfc0e4ec common/autoconf/spec.gmk.in
+--- a/common/autoconf/spec.gmk.in	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/spec.gmk.in	Wed Nov 01 08:51:31 2017 +0100
+@@ -122,6 +122,15 @@
+   export PATH:=@VS_PATH@
+ endif
+ 
++ifeq ($(OPENJDK_TARGET_OS_ENV), windows.msys)
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++    # On msys2, when buidling with microsoft toolchain 
++    # prohibit msys path conversion from trying to be
++    # "intelligent", and rely on fixpath instead.
++    export MSYS2_ARG_CONV_EXCL:=*
++  endif
++endif
++
+ SYSROOT_CFLAGS := @SYSROOT_CFLAGS@
+ SYSROOT_LDFLAGS := @SYSROOT_LDFLAGS@
+ 
+@@ -424,7 +433,7 @@
+ CPP:=@FIXPATH@ @CPP@
+ 
+ # The linker can be gcc or ld on unix systems, or link.exe on windows systems.
+-LD:=@FIXPATH@ @LD@
++LD:=@FIXPATHJ@ @LD@
+ 
+ # Xcode SDK path
+ SDKROOT:=@SDKROOT@
+@@ -446,7 +455,7 @@
+ LDFLAGS_CXX_JDK:=@LDFLAGS_CXX_JDK@
+ 
+ # Sometimes a different linker is needed for c++ libs
+-LDCXX:=@FIXPATH@ @LDCXX@
++LDCXX:=@FIXPATHJ@ @LDCXX@
+ # The flags for linking libstdc++ linker.
+ LIBCXX:=@LIBCXX@
+ 
+@@ -552,18 +561,18 @@
+ SJAVAC_SERVER_JAVA_CMD:=@SJAVAC_SERVER_JAVA@
+ # These variables are meant to be used. They are defined with = instead of := to make
+ # it possible to override only the *_CMD variables.
+-JAVA=@FIXPATH@ $(JAVA_CMD) $(JAVA_FLAGS_BIG) $(JAVA_FLAGS)
+-JAVA_SMALL=@FIXPATH@ $(JAVA_CMD) $(JAVA_FLAGS_SMALL) $(JAVA_FLAGS)
+-JAVA_JAVAC=@FIXPATH@ $(JAVA_CMD) $(JAVA_FLAGS_JAVAC) $(JAVA_FLAGS)
+-JAVAC=@FIXPATH@ $(JAVAC_CMD)
+-JAVAH=@FIXPATH@ $(JAVAH_CMD)
+-JAR=@FIXPATH@ $(JAR_CMD)
+-JLINK = @FIXPATH@ $(JLINK_CMD) $(JAVA_TOOL_FLAGS_SMALL)
+-JMOD = @FIXPATH@ $(JMOD_CMD) $(JAVA_TOOL_FLAGS_SMALL)
+-JARSIGNER=@FIXPATH@ $(JARSIGNER_CMD)
++JAVA=@FIXPATHJ@ $(JAVA_CMD) $(JAVA_FLAGS_BIG) $(JAVA_FLAGS)
++JAVA_SMALL=@FIXPATHJ@ $(JAVA_CMD) $(JAVA_FLAGS_SMALL) $(JAVA_FLAGS)
++JAVA_JAVAC=@FIXPATHJ@ $(JAVA_CMD) $(JAVA_FLAGS_JAVAC) $(JAVA_FLAGS)
++JAVAC=@FIXPATHJ@ $(JAVAC_CMD)
++JAVAH=@FIXPATHJ@ $(JAVAH_CMD)
++JAR=@FIXPATHJ@ $(JAR_CMD)
++JLINK = @FIXPATHJ@ $(JLINK_CMD) $(JAVA_TOOL_FLAGS_SMALL)
++JMOD = @FIXPATHJ@ $(JMOD_CMD) $(JAVA_TOOL_FLAGS_SMALL)
++JARSIGNER=@FIXPATHJ@ $(JARSIGNER_CMD)
+ # A specific java binary with specific options can be used to run
+ # the long running background sjavac servers and other long running tasks.
+-SJAVAC_SERVER_JAVA=@FIXPATH@ @FIXPATH_DETACH_FLAG@ $(SJAVAC_SERVER_JAVA_CMD) \
++SJAVAC_SERVER_JAVA=@FIXPATHJ@ @FIXPATH_DETACH_FLAG@ $(SJAVAC_SERVER_JAVA_CMD) \
+     $(SJAVAC_SERVER_JAVA_FLAGS)
+ 
+ # Hotspot sets this variable before reading the SPEC when compiling sa-jdi.jar. Avoid
+@@ -572,7 +581,7 @@
+ 
+ 
+ BUILD_JAVA_FLAGS := @BOOTCYCLE_JVM_ARGS_BIG@
+-BUILD_JAVA=@FIXPATH@ $(BUILD_JDK)/bin/java $(BUILD_JAVA_FLAGS)
++BUILD_JAVA=@FIXPATHJ@ $(BUILD_JDK)/bin/java $(BUILD_JAVA_FLAGS)
+ 
+ # Use ?= as this can be overridden from bootcycle-spec.gmk
+ BOOT_JDK_MODULAR ?= @BOOT_JDK_MODULAR@
+diff -r a08cbfc0e4ec common/autoconf/toolchain.m4
+--- a/common/autoconf/toolchain.m4	Thu Aug 03 18:56:56 2017 +0000
++++ b/common/autoconf/toolchain.m4	Wed Nov 01 08:51:31 2017 +0100
+@@ -41,7 +41,7 @@
+ VALID_TOOLCHAINS_solaris="solstudio"
+ VALID_TOOLCHAINS_macosx="gcc clang"
+ VALID_TOOLCHAINS_aix="xlc"
+-VALID_TOOLCHAINS_windows="microsoft"
++VALID_TOOLCHAINS_windows="gcc microsoft"
+ 
+ # Toolchain descriptions
+ TOOLCHAIN_DESCRIPTION_clang="clang/LLVM"
+@@ -648,30 +648,36 @@
+     AC_CHECK_PROG([MSBUILD], [msbuild.exe], [msbuild.exe],,,)
+   fi
+ 
+-  if test "x$OPENJDK_TARGET_OS" = xsolaris; then
+-    BASIC_PATH_PROGS(STRIP, strip)
+-    BASIC_FIXUP_EXECUTABLE(STRIP)
+-    BASIC_PATH_PROGS(NM, nm)
+-    BASIC_FIXUP_EXECUTABLE(NM)
+-    BASIC_PATH_PROGS(GNM, gnm)
+-    BASIC_FIXUP_EXECUTABLE(GNM)
+-  elif test "x$OPENJDK_TARGET_OS" != xwindows; then
+-    # FIXME: we should unify this with the solaris case above.
++  if test "x$OPENJDK_TARGET_OS" = xwindows && test "x$TOOLCHAIN_TYPE" = xgcc; then
++    # Setup the resource compiler (RC) for MSYS
++    AC_CHECK_PROG([RC], [windres], [windres],,,)
++    BASIC_FIXUP_EXECUTABLE(RC)
++  fi
++
++  if test "x$OPENJDK_TARGET_OS" != xwindows || test "x$TOOLCHAIN_TYPE" = xgcc; then
+     BASIC_CHECK_TOOLS(STRIP, strip)
+     BASIC_FIXUP_EXECUTABLE(STRIP)
++    
+     if test "x$TOOLCHAIN_TYPE" = xgcc; then
+       BASIC_CHECK_TOOLS(NM, nm gcc-nm)
+     else
+       BASIC_CHECK_TOOLS(NM, nm)
+     fi
+     BASIC_FIXUP_EXECUTABLE(NM)
+-    GNM="$NM"
++
++    if test "x$OPENJDK_TARGET_OS" = xsolaris; then
++      BASIC_PATH_PROGS(GNM, gnm)
++      BASIC_FIXUP_EXECUTABLE(GNM)
++    else
++      GNM="$NM"
++    fi
+     AC_SUBST(GNM)
+   fi
+ 
+   # objcopy is used for moving debug symbols to separate files when
+   # full debug symbols are enabled.
+-  if test "x$OPENJDK_TARGET_OS" = xsolaris || test "x$OPENJDK_TARGET_OS" = xlinux; then
++  if test "x$OPENJDK_TARGET_OS" = xsolaris || test "x$OPENJDK_TARGET_OS" = xlinux \
++    || (test "x$OPENJDK_TARGET_OS" = xwindows && test "x$TOOLCHAIN_TYPE" = xgcc) ; then
+     BASIC_CHECK_TOOLS(OBJCOPY, [gobjcopy objcopy])
+     # Only call fixup if objcopy was found.
+     if test -n "$OBJCOPY"; then
+diff -r a08cbfc0e4ec make/Images.gmk
+--- a/make/Images.gmk	Thu Aug 03 18:56:56 2017 +0000
++++ b/make/Images.gmk	Wed Nov 01 08:51:31 2017 +0100
+@@ -188,8 +188,8 @@
+ # All variables in this section are assigned with simple =, without :, to enable
+ # more selective overriding from the custom version of this file.
+ #
+-# Avoid evaluating this whole section on windows for speed and stability
+-ifneq ($(OPENJDK_TARGET_OS), windows)
++# Avoid evaluating this whole section with microsoft toolchain for speed and stability
++ifneq ($(TOOLCHAIN_TYPE), microsoft)
+   JRE_MAN_PAGES += \
+       java.1 \
+       jjs.1 \
+@@ -246,6 +246,11 @@
+     MAN_SRC_DIR = $(MAN_SRC_BASEDIR)/bsd/doc
+     MAN1_SUBDIR = man
+   endif
++  
++  ifeq ($(OPENJDK_TARGET_OS)-$(TOOLCHAIN_TYPE), windows-gcc)
++    MAN_SRC_DIR = $(MAN_SRC_BASEDIR)/linux/doc
++    MAN1_SUBDIR = man
++  endif
+ 
+   $(JRE_IMAGE_DIR)/man/man1/%: $(MAN_SRC_DIR)/$(MAN1_SUBDIR)/%
+ 	$(call LogInfo, Copying $(patsubst $(OUTPUT_ROOT)/%,%,$@))
+@@ -273,7 +278,7 @@
+ 	$(install-file)
+   endif
+ 
+-  ifneq ($(findstring $(OPENJDK_TARGET_OS), linux macosx), )
++  ifneq ($(findstring $(OPENJDK_TARGET_OS), linux macosx windows), )
+     $(JRE_IMAGE_DIR)/man/ja:
+ 	$(call LogInfo, Creating $(patsubst $(OUTPUT_ROOT)/%,%,$@))
+ 	$(CD) $(@D) && $(RM) ja && $(LN) -s ja_JP.UTF-8 ja
+@@ -295,7 +300,7 @@
+         $(addprefix $(JDK_IMAGE_DIR)/man/ja_JP.PCK/man1/, $(JDK_MAN_PAGES))
+   endif
+ 
+-  ifneq ($(findstring $(OPENJDK_TARGET_OS), linux macosx), )
++  ifneq ($(findstring $(OPENJDK_TARGET_OS), linux macosx windows), )
+     JRE_MAN_PAGE_LIST = $(addprefix $(JRE_IMAGE_DIR)/man/man1/, $(JRE_MAN_PAGES)) \
+         $(addprefix $(JRE_IMAGE_DIR)/man/ja_JP.UTF-8/man1/, $(JRE_MAN_PAGES)) \
+         $(JRE_IMAGE_DIR)/man/ja
+@@ -304,10 +309,10 @@
+         $(addprefix $(JDK_IMAGE_DIR)/man/ja_JP.UTF-8/man1/, $(JDK_MAN_PAGES)) \
+         $(JDK_IMAGE_DIR)/man/ja
+   endif
+-
++  
+   JRE_TARGETS += $(JRE_MAN_PAGE_LIST)
+   JDK_TARGETS += $(JDK_MAN_PAGE_LIST)
+-endif # Windows
++endif # Microsoft
+ 
+ ################################################################################
+ # src.zip
+diff -r a08cbfc0e4ec make/ZipSource.gmk
+--- a/make/ZipSource.gmk	Thu Aug 03 18:56:56 2017 +0000
++++ b/make/ZipSource.gmk	Wed Nov 01 08:51:31 2017 +0100
+@@ -84,7 +84,7 @@
+ endif
+ 
+ zip: $(SRC_ZIP_SRCS)
+-	+$(MAKE) $(MAKE_ARGS) -f ZipSource.gmk do-zip SRC_GENERATED=true
++	+($(CD) $(SRC_ROOT)/make && $(MAKE) $(MAKE_ARGS) -f ZipSource.gmk do-zip SRC_GENERATED=true)
+ 
+ TARGETS += zip
+ 
+diff -r a08cbfc0e4ec make/common/NativeCompilation.gmk
+--- a/make/common/NativeCompilation.gmk	Thu Aug 03 18:56:56 2017 +0000
++++ b/make/common/NativeCompilation.gmk	Wed Nov 01 08:51:31 2017 +0100
+@@ -176,7 +176,7 @@
+ # of make targets for dependent files (.d.targets)
+ DEPENDENCY_TARGET_SED_PATTERN := \
+     -e 's/\#.*//' \
+-    -e 's/^[^:]*: *//' \
++    -e 's/^.*: *//' \
+     -e 's/ *\\$$$$//' \
+     -e 's/^[	 ]*//' \
+     -e '/^$$$$/ d' \
+@@ -780,6 +780,7 @@
+ 		$$(call ExecuteWithLog, $$@, \
+ 		    $$($1_RC) $$($1_RC_FLAGS) $$($1_SYSROOT_CFLAGS) $(CC_OUT_OPTION)$$@ \
+ 		    $$($1_VERSIONINFO_RESOURCE))
++        ifeq ($(TOOLCHAIN_TYPE), microsoft)
+                 # Windows RC compiler does not support -showIncludes, so we mis-use CL
+                 # for this. Filter out RC specific arguments that are unknown to CL.
+                 # For some unknown reason, in this case CL actually outputs the show
+@@ -795,6 +796,7 @@
+ 		$(ECHO) $$($1_RES): \\ > $$($1_RES_DEP) ; \
+ 		$(SED) $(WINDOWS_SHOWINCLUDE_SED_PATTERN) $$($1_RES_DEP).obj.log >> $$($1_RES_DEP) ; \
+ 		$(SED) $(DEPENDENCY_TARGET_SED_PATTERN) $$($1_RES_DEP) > $$($1_RES_DEP_TARGETS)
++      endif
+     endif
+   endif
+ 
+@@ -816,7 +818,15 @@
+   # Pickup extra OPENJDK_TARGET_OS_TYPE and/or OPENJDK_TARGET_OS dependent variables
+   # for LDFLAGS and LIBS
+   $1_EXTRA_LDFLAGS:=$$($1_LDFLAGS_$(OPENJDK_TARGET_OS_TYPE)) $$($1_LDFLAGS_$(OPENJDK_TARGET_OS))
+-  $1_EXTRA_LIBS:=$$($1_LIBS_$(OPENJDK_TARGET_OS_TYPE)) $$($1_LIBS_$(OPENJDK_TARGET_OS))
++  ifeq ($(OPENJDK_TARGET_OS)-$(TOOLCHAIN_TYPE), windows-gcc)
++    # for windows with gcc toolchain take the original MSVC LIBS
++    # remove the .lib suffix and add '-l' to library names
++    ifneq ($$($1_LIBS_$(OPENJDK_TARGET_OS)), )
++      $1_EXTRA_LIBS:=$$(addprefix -l,$$(basename $$($1_LIBS_$(OPENJDK_TARGET_OS))))
++    endif
++  else
++    $1_EXTRA_LIBS:=$$($1_LIBS_$(OPENJDK_TARGET_OS_TYPE)) $$($1_LIBS_$(OPENJDK_TARGET_OS))
++  endif
+   ifneq (,$$($1_REAL_MAPFILE))
+     $1_EXTRA_LDFLAGS += $(call SET_SHARED_LIBRARY_MAPFILE,$$($1_REAL_MAPFILE))
+   endif
+@@ -837,7 +847,7 @@
+       # Only copy debug symbols for dynamic libraries and programs.
+       ifeq ($$($1_STATIC_LIBRARY), )
+         # Generate debuginfo files.
+-        ifeq ($(OPENJDK_TARGET_OS), windows)
++        ifeq ($(OPENJDK_TARGET_OS)-$(TOOLCHAIN_TYPE), windows-microsoft)
+           $1_EXTRA_LDFLAGS += -debug "-pdb:$$($1_OUTPUT_DIR)/$$($1_NOSUFFIX).pdb" \
+               "-map:$$($1_OUTPUT_DIR)/$$($1_NOSUFFIX).map"
+           $1_DEBUGINFO_FILES := $$($1_OUTPUT_DIR)/$$($1_NOSUFFIX).pdb \
+@@ -847,7 +857,7 @@
+           # symbol files to avoid unnecessary relinking on rebuild.
+           $1_CREATE_DEBUGINFO_CMDS := $(TOUCH) $$($1_TARGET)
+ 
+-        else ifneq ($(findstring $(OPENJDK_TARGET_OS), linux solaris), )
++        else ifneq ($(findstring $(OPENJDK_TARGET_OS), linux solaris windows), )
+           $1_DEBUGINFO_FILES := $$($1_OUTPUT_DIR)/$$($1_NOSUFFIX).debuginfo
+           # Setup the command line creating debuginfo files, to be run after linking.
+           # It cannot be run separately since it updates the original target file
+@@ -903,7 +913,11 @@
+     # Generating a dynamic library.
+     $1_EXTRA_LDFLAGS += $$(call SET_SHARED_LIBRARY_NAME,$$($1_BASENAME))
+     ifeq ($(OPENJDK_TARGET_OS), windows)
+-      $1_EXTRA_LDFLAGS += "-implib:$$($1_OBJECT_DIR)/$$($1_LIBRARY).lib"
++      ifeq ($(TOOLCHAIN_TYPE), microsoft)
++        $1_EXTRA_LDFLAGS += "-implib:$$($1_OBJECT_DIR)/$$($1_LIBRARY).lib"
++      else ifeq ($(TOOLCHAIN_TYPE), gcc)
++        $1_EXTRA_LDFLAGS += -Wl,--out-implib,$$($1_OBJECT_DIR)/$$($1_LIBRARY).lib
++      endif
+       # Create a rule for the import lib so that other rules may depend on it
+       $$($1_OBJECT_DIR)/$$($1_LIBRARY).lib: $$($1_TARGET)
+     endif
+@@ -940,7 +954,8 @@
+                 # Keep as much as possible on one execution line for best performance
+                 # on Windows
+ 		$$(call LogInfo, Linking $$($1_BASENAME))
+-                ifeq ($(OPENJDK_TARGET_OS), windows)
++                # NEED TO CHANGE HERE I BELIEVE
++                ifeq ($(TOOLCHAIN_TYPE), microsoft)
+ 		  $$(call ExecuteWithLog, $$($1_OBJECT_DIR)/$$($1_SAFE_NAME)_link, \
+ 		      $$($1_LD) $$($1_LDFLAGS) $$($1_EXTRA_LDFLAGS) $$($1_SYSROOT_LDFLAGS) \
+ 		      $(LD_OUT_OPTION)$$@ $$($1_LD_OBJ_ARG) $$($1_RES) $$($1_LIBS) \
+@@ -996,7 +1011,7 @@
+     $1_VARDEPS_FILE := $$(call DependOnVariable, $1_VARDEPS, \
+         $$($1_OBJECT_DIR)/$$($1_NOSUFFIX).vardeps)
+ 
+-    ifeq ($(OPENJDK_TARGET_OS), windows)
++    ifeq ($(TOOLCHAIN_TYPE), microsoft)
+       ifeq ($$($1_EMBED_MANIFEST), true)
+         $1_EXTRA_LDFLAGS += -manifest:embed
+       endif
+@@ -1010,7 +1025,7 @@
+ 		        $(EXE_OUT_OPTION)$$($1_TARGET) \
+ 		        $$($1_ALL_OBJS) $$($1_RES) \
+ 		        $$($1_LIBS) $$($1_EXTRA_LIBS))
+-                ifeq ($(OPENJDK_TARGET_OS), windows)
++                ifeq ($(TOOLCHAIN_TYPE), microsoft)
+                   ifneq ($$($1_MANIFEST), )
+ 		    $$($1_MT) -nologo -manifest $$($1_MANIFEST) -identity:"$$($1_PROGRAM).exe, version=$$($1_MANIFEST_VERSION)" -outputresource:$$@;#1
+                   endif

@@ -1,0 +1,238 @@
+# Maintainer: Peter Budai <peterbudai@hotmail.com>
+
+pkgname=("${MINGW_PACKAGE_PREFIX}-jre9-openjdk-headless" "${MINGW_PACKAGE_PREFIX}-jre9-openjdk" "${MINGW_PACKAGE_PREFIX}-jdk9-openjdk")
+_realname=openjdk
+_majorver=9
+_updatever=181
+pkgbase=java$_majorver-$_realname
+pkgver=$_majorver.u$_updatever
+_hg_tag="jdk-$_majorver+$_updatever"
+_repo_ver=jdk$_java_ver.$_hg_tag
+pkgrel=1
+_pkg_full_ver=$pkgver-$pkgrel
+arch=('any')
+url='http://openjdk.java.net/'
+license=('custom')
+makedepends=(
+
+)
+_url_src=http://hg.openjdk.java.net/jdk9/jdk9
+source=(
+        "jdk9u-${_repo_ver}.tar.gz::$_url_src/archive/$_hg_tag.tar.gz"
+        "corba-${_repo_ver}.tar.gz::$_url_src/corba/archive/$_hg_tag.tar.gz"
+        "hotspot-${_repo_ver}.tar.gz::$_url_src/hotspot/archive/$_hg_tag.tar.gz"
+        "jaxp-${_repo_ver}.tar.gz::$_url_src/jaxp/archive/$_hg_tag.tar.gz"
+        "jaxws-${_repo_ver}.tar.gz::$_url_src/jaxws/archive/$_hg_tag.tar.gz"
+        "jdk-${_repo_ver}.tar.gz::$_url_src/jdk/archive/$_hg_tag.tar.gz"
+        "langtools-${_repo_ver}.tar.gz::$_url_src/langtools/archive/$_hg_tag.tar.gz"
+        "nashorn-${_repo_ver}.tar.gz::$_url_src/nashorn/archive/$_hg_tag.tar.gz"
+        01.jdk9.mingw.patch
+        02.jdk9.hotspot.mingw.patch
+        03.jdk9.jdk.mingw.patch
+        )
+md5sums=('aa108a8322b1dadf1bae7e788b2f2224'
+         '7ddd9f3158fb3db3399ab772fc58a3cd'
+         '3076c53120f5c65349d635547e802826'
+         '246bc4b8ec15e53e4e3c28d074a616b2'
+         'e8455fdae8af20c42e25a2ef921a8aff'
+         '4e7e7b3deb3f470525025da1a497e134'
+         '9e503aa3835f1ce841bf7601d0605f9a'
+         '3868af06c7f1dfd6f1399e8dad974b81'
+         '073a9bfa94eae28e016f14f3b6183ca1'
+         '04e953ff7f84299db24dce1fb7e5201e'
+         '5713db088eff834ab5223350bc3e39a8')
+
+case "$CARCH" in
+  x86_64) _JARCH='x86_64';;
+  i686)   _JARCH='x86';;
+esac
+
+_jvmdir=${MINGW_PREFIX}/lib/jvm/java-$_majorver-openjdk
+_bindir=${MINGW_PREFIX}/bin
+_libdir=${MINGW_PREFIX}/lib/jvm/java-$_majorver-openjdk
+_imgdir=jdk$_majorver-$_hg_tag/build/windows-$_JARCH-normal-server-release/images
+_nonheadless=(bin/awt.dll
+              bin/jsound.dll
+              bin/jsoundds.dll
+              bin/splashscreen.dll)
+
+prepare() {
+  cd "jdk$_majorver-$_hg_tag"
+  for subrepo in corba hotspot jdk jaxws jaxp langtools nashorn
+  do
+    ln -s ../$subrepo-$_hg_tag $subrepo
+  done
+
+  patch -p1 -i ${srcdir}/01.jdk9.mingw.patch
+  cd hotspot && patch -p1 -i ${srcdir}/02.jdk9.hotspot.mingw.patch && cd ..
+  cd jdk && patch -p1 -i ${srcdir}/03.jdk9.jdk.mingw.patch && cd ..
+}
+
+build() {
+  cd "jdk$_majorver-$_hg_tag"
+
+  NUM_PROC_OPT=''
+  MAKEFLAG_J=$(echo $MAKEFLAGS | sed -En 's/.*-j([0-9]+).*/\1/p')
+  if [ -n $MAKEFLAG_J ]; then
+    # http://hg.openjdk.java.net/jdk9/jdk9/file/85e6cb013b98/make/InitSupport.gmk#l105
+    echo "Removing '-j$MAKEFLAG_J' from MAKEFLAGS to prevent build fail. Passing it directly to ./configure."
+    export MAKEFLAGS=${MAKEFLAGS/-j$MAKEFLAG_J/}
+    NUM_PROC_OPT="--with-num-cores=$MAKEFLAG_J"
+  fi
+
+  # CFLAGS, CXXFLAGS and LDFLAGS are ignored as shown by a warning
+  # in the output of ./configure unless used like such:
+  #  --with-extra-cflags="$CFLAGS"
+  #  --with-extra-cxxflags="$CXXFLAGS"
+  #  --with-extra-ldflags="$LDFLAGS"
+  # See also paragraph "Configure Control Variables from "jdk$_majorver-$_hg_tag/common/doc/building.md
+  _CFLAGS=$CFLAGS
+  _CXXFLAGS=$CXXFLAGS
+  _LDFLAGS=$LDFLAGS
+
+  unset CFLAGS
+  unset CXXFLAGS
+  unset LDFLAGS
+  
+  # regenrate generated_configure.sh 
+  ./common/autoconf/autogen.sh
+
+  ./configure \
+    --prefix=${MINGW_PREFIX} \
+    --with-toolchain-type=gcc \
+    --disable-freetype-bundling \
+    --disable-javac-server \
+    --with-native-debug-symbols="none" \
+    --with-libjpeg=system \
+    --with-libpng=system \
+    --with-giflib=system \
+    --with-zlib=system \
+    --disable-warnings-as-errors 
+
+
+#    --build=${MINGW_CHOST} \
+#    --host=${MINGW_CHOST} \
+#    --target=${MINGW_CHOST} \
+ #   --with-extra-cflags="$_CFLAGS" \
+ #   --with-extra-cxxflags="$_CXXFLAGS" \
+ #   --with-extra-ldflags="$_LDFLAGS" \    
+
+  make LOG=info,cmdlines images
+}
+
+#check() {
+#  cd "jdk$_majorver-$_hg_tag"
+#  make check
+#}
+
+package_mingw-w64-x86_64-jre9-openjdk-headless() {
+  pkgdesc="OpenJDK Java $_majorver headless runtime environment"
+  depends=(
+          "${MINGW_PACKAGE_PREFIX}-libjpeg-turbo"
+          "${MINGW_PACKAGE_PREFIX}-libpng"
+          "${MINGW_PACKAGE_PREFIX}-giflib"
+          "${MINGW_PACKAGE_PREFIX}-zlib"
+          )
+  provides=("${MINGW_PACKAGE_PREFIX}-java-runtime-headless=$_majorver" "${MINGW_PACKAGE_PREFIX}-java-runtime-headless-openjdk=$_majorver")
+
+  #install=install_jre9-openjdk-headless.sh
+
+  cd $_imgdir/jre
+
+  install -d -m 755 "$pkgdir$_bindir"
+  cp -a bin "$pkgdir${MINGW_PREFIX}"
+  
+  install -d -m 755 "$pkgdir$_libdir"
+  cp -a lib "$pkgdir$_libdir"
+
+  for f in ${_nonheadless[@]}; do
+    rm "$pkgdir${MINGW_PREFIX}/$f"
+  done
+
+  cp ../jdk/release "$pkgdir$_libdir"
+  cp ../jdk/lib/modules "$pkgdir$_libdir"
+
+  # Conf
+  install -d -m 755 "$pkgdir${MINGW_PREFIX}/etc"
+  cp -r conf "$pkgdir${MINGW_PREFIX}/etc/$pkgbase"
+
+  # Legal
+  install -d -m 755 "$pkgdir${MINGW_PREFIX}/share/licenses"
+  cp -r legal "$pkgdir${MINGW_PREFIX}/share/licenses/$pkgbase"
+
+  # Man pages
+  for f in man/man1/* man/ja/man1/*; do
+    install -D -m 644 $f "$pkgdir${MINGW_PREFIX}/share/${f/\.1/-openjdk9.1}"
+  done
+}
+
+package_mingw-w64-x86_64-jre9-openjdk() {
+  pkgdesc="OpenJDK Java $_majorver full runtime environment"
+  depends=("${MINGW_PACKAGE_PREFIX}-jre$_majorver-openjdk-headless=$_pkg_full_ver")
+  provides=("${MINGW_PACKAGE_PREFIX}-java-runtime=$_majorver" "${MINGW_PACKAGE_PREFIX}-java-runtime-openjdk=$_majorver")
+  #install=install_jre9-openjdk.sh
+
+  cd $_imgdir/jre
+
+  install -d -m 755 "$pkgdir${MINGW_PREFIX}/bin"
+
+  for f in ${_nonheadless[@]}; do
+    install -D -m 644 $f "$pkgdir${MINGW_PREFIX}/$f"
+  done
+}
+
+package_mingw-w64-x86_64-jdk9-openjdk() {
+  pkgdesc="OpenJDK Java $_majorver development kit"
+  depends=("${MINGW_PACKAGE_PREFIX}-jre$_majorver-openjdk=$_pkg_full_ver" "${MINGW_PACKAGE_PREFIX}java-environment-common=3")
+  provides=("${MINGW_PACKAGE_PREFIX}-java-environment=$_majorver" "${MINGW_PACKAGE_PREFIX}-java-environment-openjdk=$_majorver")
+  #install=install_jdk9-openjdk.sh
+
+  cd $_imgdir/jdk
+
+  install -d -m 755 "$pkgdir$_bindir"
+  cp -a bin "$pkgdir${MINGW_PREFIX}"
+  
+  install -d -m 755 "$pkgdir$_libdir"
+  cp -a demo include jmods lib \
+    "$pkgdir${MINGW_PREFIX}"
+
+  rm "$pkgdir${MINGW_PREFIX}/lib/src.zip"
+
+  # Remove files held by JRE
+  pushd ../jre
+  for d in bin lib; do
+    find $d ! -type d -exec rm "$pkgdir${MINGW_PREFIX}/{}" \;
+  done
+  popd
+
+  find "$pkgdir${MINGW_PREFIX}/lib" -type d -empty -delete
+
+  # Conf files all belong to JRE
+
+  # Legal
+  install -d -m 755 "$pkgdir${MINGW_PREFIX}/share/licenses"
+  cp -r legal "$pkgdir${MINGW_PREFIX}/share/licenses/$pkgbase"
+  pushd ../jre/legal
+  find . ! -type d -exec rm "$pkgdir${MINGW_PREFIX}/share/licenses/$pkgbase/{}" \;
+  popd
+  find "$pkgdir${MINGW_PREFIX}/share/licenses" -type d -empty -delete
+
+  # Man pages
+  for f in man/man1/* man/ja/man1/*; do
+    if [ ! -e ../jre/$f ]; then
+      install -D -m 644 $f "$pkgdir${MINGW_PREFIX}/share/${f/\.1/-openjdk$_majorver.1}"
+    fi
+  done
+}
+
+package_mingw-w64-i686-jre9-openjdk-headless() {
+  echo "HELLO"
+}
+
+package_mingw-w64-i686-jdk9-openjdk() {
+  echo "HELLO"
+}
+
+package_mingw-w64-i686-jre9-openjdk() {
+  echo "HELLO"
+}
