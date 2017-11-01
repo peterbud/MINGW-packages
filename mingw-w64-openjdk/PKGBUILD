@@ -13,9 +13,7 @@ _pkg_full_ver=$pkgver-$pkgrel
 arch=('any')
 url='http://openjdk.java.net/'
 license=('custom')
-makedepends=(
-
-)
+makedepends=(unzip)
 _url_src=http://hg.openjdk.java.net/jdk9/jdk9
 source=(
         "jdk9u-${_repo_ver}.tar.gz::$_url_src/archive/$_hg_tag.tar.gz"
