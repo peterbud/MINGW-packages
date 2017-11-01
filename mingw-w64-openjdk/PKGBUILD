@@ -13,7 +13,14 @@ _pkg_full_ver=$pkgver-$pkgrel
 arch=('any')
 url='http://openjdk.java.net/'
 license=('custom')
-makedepends=(zip unzip)
+makedepends=(zip
+          unzip
+          "${MINGW_PACKAGE_PREFIX}-freetype"
+          "${MINGW_PACKAGE_PREFIX}-libjpeg-turbo"
+          "${MINGW_PACKAGE_PREFIX}-libpng"
+          "${MINGW_PACKAGE_PREFIX}-giflib"
+          "${MINGW_PACKAGE_PREFIX}-zlib"
+          )
 _url_src=http://hg.openjdk.java.net/jdk9/jdk9
 source=(
         "jdk9u-${_repo_ver}.tar.gz::$_url_src/archive/$_hg_tag.tar.gz"
@@ -126,6 +133,7 @@ build() {
 package_mingw-w64-x86_64-jre9-openjdk-headless() {
   pkgdesc="OpenJDK Java $_majorver headless runtime environment"
   depends=(
+          "${MINGW_PACKAGE_PREFIX}-freetype"
           "${MINGW_PACKAGE_PREFIX}-libjpeg-turbo"
           "${MINGW_PACKAGE_PREFIX}-libpng"
           "${MINGW_PACKAGE_PREFIX}-giflib"
