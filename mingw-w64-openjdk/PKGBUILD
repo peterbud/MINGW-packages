@@ -45,8 +45,8 @@ md5sums=('aa108a8322b1dadf1bae7e788b2f2224'
          '9e503aa3835f1ce841bf7601d0605f9a'
          '3868af06c7f1dfd6f1399e8dad974b81'
          '3bede57816bce34550ae71a535ae81ff'
-         '04e953ff7f84299db24dce1fb7e5201e'
-         '5713db088eff834ab5223350bc3e39a8')
+         '92f462ffe774a64c35cc6d01acc68d80'
+         '75c881d84504395d61c7938887e8429d')
 
 case "$CARCH" in
   x86_64) _JARCH='x86_64';;

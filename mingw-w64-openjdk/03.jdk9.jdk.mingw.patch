@@ -1,6 +1,6 @@
 diff -r 65464a307408 make/launcher/Launcher-jdk.accessibility.gmk
 --- a/make/launcher/Launcher-jdk.accessibility.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/launcher/Launcher-jdk.accessibility.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/launcher/Launcher-jdk.accessibility.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -30,18 +30,25 @@
  
  ifeq ($(OPENJDK_TARGET_OS), windows)
@@ -91,7 +91,7 @@ diff -r 65464a307408 make/launcher/Launcher-jdk.accessibility.gmk
        PROGRAM := jaccesswalker$1, \
 diff -r 65464a307408 make/launcher/LauncherCommon.gmk
 --- a/make/launcher/LauncherCommon.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/launcher/LauncherCommon.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/launcher/LauncherCommon.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -174,6 +174,21 @@
      endif
    endif
@@ -101,8 +101,8 @@ diff -r 65464a307408 make/launcher/LauncherCommon.gmk
 +        java.lib advapi32.lib \
 +        $$($1_LIBS_windows)
 +      ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+          LAUNCHER_LDFLAGS_windows := /LIBPATH:"$(dir $$($1_WINDOWS_JLI_LIB))" \
-+            /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.base/libjava"
++          LAUNCHER_LDFLAGS_windows := -LIBPATH:"$$(dir $$($1_WINDOWS_JLI_LIB))" \
++            -LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.base/libjava"
 +      else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +          LAUNCHER_LDFLAGS_windows := -L$$(dir $$($1_WINDOWS_JLI_LIB)) -L$(SUPPORT_OUTPUTDIR)/native/java.base/libjava
 +          ifeq ($(USE_EXTERNAL_LIBZ), true)
@@ -133,7 +133,7 @@ diff -r 65464a307408 make/launcher/LauncherCommon.gmk
        PROGRAM := $1, \
 diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
 --- a/make/lib/Awt2dLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Awt2dLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Awt2dLibraries.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -203,7 +203,21 @@
        awt/image/cvutils/img_colors.c \
        #
@@ -147,7 +147,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
 +    -delayload:winspool.drv -delayload:imm32.dll \
 +    -delayload:ole32.dll -delayload:comdlg32.dll \
 +    -delayload:comctl32.dll -delayload:shlwapi.dll \
-+    /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++    -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LIBAWT_CFLAGS += 
@@ -192,7 +192,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
  LCMS_CFLAGS=-DCMS_DONT_USE_FAST_FLOOR
  
 +ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+    LCMS_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_AWT_LIB))" /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++    LCMS_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_AWT_LIB))" -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LCMS_LDFLAGS_windows := -L$(dir $(WIN_AWT_LIB)) -L$(dir $(WIN_JAVA_LIB))
 +endif
@@ -240,7 +240,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
  endif
  
 +ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+    LIBJPEG_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++    LIBJPEG_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LIBJPEG_LDFLAGS_windows := 
 +endif
@@ -264,7 +264,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
  endif
  
 +ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+    LIBFONTMANAGER_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_AWT_LIB))" /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++    LIBFONTMANAGER_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_AWT_LIB))" -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LIBFONTMANAGER_LDFLAGS_windows := -L$(dir $(WIN_AWT_LIB)) -L$(dir $(WIN_JAVA_LIB))
 +endif
@@ -296,7 +296,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
 +      
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
 +    LIBJAWT_CFLAGS += -EHsc
-+    LIBJAWT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_AWT_LIB))"
++    LIBJAWT_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_AWT_LIB))"
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LIBJAWT_LDFLAGS_windows := -L$(dir $(WIN_AWT_LIB))
 +  endif
@@ -330,7 +330,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
 -    LIBSPLASHSCREEN_LDFLAGS := -delayload:user32.dll
 -    LIBSPLASHSCREEN_LIBS += kernel32.lib user32.lib gdi32.lib delayimp.lib $(WIN_JAVA_LIB) jvm.lib
 +    ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+      LIBSPLASHSCREEN_LDFLAGS_windows := -delayload:user32.dll /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++      LIBSPLASHSCREEN_LDFLAGS_windows := -delayload:user32.dll -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +    else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +      LIBSPLASHSCREEN_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
 +    endif
@@ -357,7 +357,7 @@ diff -r 65464a307408 make/lib/Awt2dLibraries.gmk
            -D "JDK_FNAME=splashscreen.dll" \
 diff -r 65464a307408 make/lib/CoreLibraries.gmk
 --- a/make/lib/CoreLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/CoreLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/CoreLibraries.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -153,6 +153,17 @@
    endif
  endif
@@ -367,7 +367,7 @@ diff -r 65464a307408 make/lib/CoreLibraries.gmk
 +        LIBJAVA_LDFLAGS_windows := -export:winFileHandleOpen -export:handleLseek \
 +            -export:getLastErrorString \
 +            -export:getErrorString -delayload:shell32.dll \
-+            /LIBPATH:"$(dir $(BUILD_LIBFDLIBM))" /LIBPATH:"$(dir $(WIN_VERIFY_LIB))"
++            -LIBPATH:"$(dir $(BUILD_LIBFDLIBM))" -LIBPATH:"$(dir $(WIN_VERIFY_LIB))"
 +    else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +        LIBJAVA_LDFLAGS_windows := -L$(dir $(BUILD_LIBFDLIBM)) -L$(dir $(WIN_VERIFY_LIB))
 +    endif
@@ -405,7 +405,7 @@ diff -r 65464a307408 make/lib/CoreLibraries.gmk
 +        LIBZIP_LDFLAGS_windows := -export:ZIP_Open -export:ZIP_Close -export:ZIP_FindEntry \
 +        -export:ZIP_ReadEntry -export:ZIP_GetNextEntry \
 +        -export:ZIP_InflateFully -export:ZIP_CRC32 -export:ZIP_FreeEntry \
-+        /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++        -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +        LIBZIP_LIBS_windows := jvm.lib $(notdir $(WIN_JAVA_LIB))
 +    else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +        LIBZIP_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
@@ -551,7 +551,7 @@ diff -r 65464a307408 make/lib/CoreLibraries.gmk
          -D "JDK_FNAME=jli.dll" \
 diff -r 65464a307408 make/lib/Lib-java.instrument.gmk
 --- a/make/lib/Lib-java.instrument.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-java.instrument.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-java.instrument.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -41,12 +41,20 @@
      #
  
@@ -564,7 +564,7 @@ diff -r 65464a307408 make/lib/Lib-java.instrument.gmk
 -  LIBINSTRUMENT_CFLAGS += -Dstrcasecmp=stricmp
 +  LIBINSTRUMENT_LIBS_windows := jvm.lib $(notdir $(WIN_JAVA_LIB)) advapi32.lib jli_static.lib
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+    LIBINSTRUMENT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))" /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.base"
++    LIBINSTRUMENT_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))" -LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.base"
 +  
 +    # Statically link the C runtime so that there are not dependencies on modules
 +    # not on the search patch when invoked from the Windows system directory
@@ -599,13 +599,13 @@ diff -r 65464a307408 make/lib/Lib-java.instrument.gmk
          -D "JDK_FNAME=instrument.dll" \
 diff -r 65464a307408 make/lib/Lib-java.management.gmk
 --- a/make/lib/Lib-java.management.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-java.management.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-java.management.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -44,6 +44,12 @@
    endif
  endif
  
 +ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+  LIBMANAGEMENT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++  LIBMANAGEMENT_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +  LIBMANAGEMENT_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
 +endif
@@ -628,13 +628,13 @@ diff -r 65464a307408 make/lib/Lib-java.management.gmk
          -D "JDK_FNAME=management.dll" \
 diff -r 65464a307408 make/lib/Lib-java.prefs.gmk
 --- a/make/lib/Lib-java.prefs.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-java.prefs.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-java.prefs.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -33,6 +33,12 @@
    LIBPREF_SRC_DIRS := $(JDK_TOPDIR)/src/java.prefs/$(OPENJDK_TARGET_OS_TYPE)/native/libprefs
  endif
  
 +ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+  LIBPREF_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++  LIBPREF_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +  LIBPREF_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
 +endif
@@ -659,7 +659,7 @@ diff -r 65464a307408 make/lib/Lib-java.prefs.gmk
          -D "JDK_FNAME=prefs.dll" \
 diff -r 65464a307408 make/lib/Lib-java.security.jgss.gmk
 --- a/make/lib/Lib-java.security.jgss.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-java.security.jgss.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-java.security.jgss.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -58,8 +58,8 @@
    ifeq ($(OPENJDK_TARGET_OS), windows)
      BUILD_LIBKRB5_NAME := w2k_lsa_auth
@@ -681,13 +681,13 @@ diff -r 65464a307408 make/lib/Lib-java.security.jgss.gmk
              -D "JDK_FNAME=$(BUILD_LIBKRB5_NAME).dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.accessibility.gmk
 --- a/make/lib/Lib-jdk.accessibility.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.accessibility.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.accessibility.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -37,6 +37,12 @@
        -I$(JDK_TOPDIR)/src/java.desktop/windows/native/include \
        -I$(JDK_TOPDIR)/src/java.desktop/share/native/include
  
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+      LIBJAVAACCESSBRIDGE_LDFLAGS_windows := /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.desktop/libjawt" -subsystem:windows
++      LIBJAVAACCESSBRIDGE_LDFLAGS_windows := -LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/java.desktop/libjawt" -subsystem:windows
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +      LIBJAVAACCESSBRIDGE_LDFLAGS_windows := -L$(SUPPORT_OUTPUTDIR)/native/java.desktop/libjawt -mwindows
 +  endif
@@ -735,7 +735,8 @@ diff -r 65464a307408 make/lib/Lib-jdk.accessibility.gmk
          SRC := $(WIN_AB_SRCDIR), \
 +        TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
          OPTIMIZATION := LOW, \
-         CFLAGS := $(filter-out -MD, $(CFLAGS_JDKLIB)) -MT $(ACCESSBRIDGE_CFLAGS) \
+-        CFLAGS := $(filter-out -MD, $(CFLAGS_JDKLIB)) -MT $(ACCESSBRIDGE_CFLAGS) \
++        CFLAGS := $(filter-out -MD, $(CFLAGS_JDKLIB)) -MT $(subst -I,,$(ACCESSBRIDGE_CFLAGS)) \
              $(addprefix -I,$(WIN_AB_SRCDIR)) \
              -I$(ROOT_SRCDIR)/include/bridge \
              -DACCESSBRIDGE_ARCH_$2, \
@@ -748,9 +749,35 @@ diff -r 65464a307408 make/lib/Lib-jdk.accessibility.gmk
              winspool.lib comdlg32.lib advapi32.lib shell32.lib \
              ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib, \
          VERSIONINFO_RESOURCE := $(ROOT_SRCDIR)/common/AccessBridgeStatusWindow.rc, \
+@@ -97,16 +112,23 @@
+ 
+   endef
+ 
++  ifeq ($(TOOLCHAIN_TYPE), microsoft)
++      LIBWACCESSBRIDGESYSINFO_LDFLAGS_windows := -subsystem:windows -machine:I386
++  else ifeq ($(TOOLCHAIN_TYPE), gcc)
++      LIBACCESSBRIDGESYSINFO_LDFLAGS_windows := -mwindows
++  endif
++
+   define SetupAccessBridgeSysInfo
+ 
+     $(call SetupNativeCompilation,BUILD_ACCESSBRIDGESYSINFO, \
+         LIBRARY = jabsysinfo, \
+         OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
+         SRC := $(SYSINFO_SRCDIR), \
++        TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+         OPTIMIZATION := LOW, \
+         CFLAGS := $(CFLAGS_JDKLIB) $(ACCESSBRIDGE_CFLAGS), \
+-        LDFLAGS := $(LDFLAGS_JDKLIB) \
+-            -subsystem:windows -machine:I386, \
++        LDFLAGS := $(LDFLAGS_JDKLIB), \
++        LDFLAGS_windows := $(LIBWACCESSBRIDGESYSINFO_LDFLAGS_windows), \
+         VERSIONINFO_RESOURCE := $(ROOT_SRCDIR)/common/AccessBridgeStatusWindow.rc, \
+         RC_FLAGS := $(RC_FLAGS) \
+             -D "JDK_FNAME=jabsysinfo.dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.attach.gmk
 --- a/make/lib/Lib-jdk.attach.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.attach.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.attach.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -28,6 +28,15 @@
  ################################################################################
  
@@ -759,7 +786,7 @@ diff -r 65464a307408 make/lib/Lib-jdk.attach.gmk
 +
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
 +    LIBATTACH_CFLAGS_windows += /Gy
-+    LIBATTACH_LDLAGS_windows := /LIBPATH="$(dir $(WIN_JAVA_LIB))" -order:@$(JDK_TOPDIR)/make/mapfiles/libattach/reorder-windows-$(OPENJDK_TARGET_CPU)
++    LIBATTACH_LDLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))" -order:@$(JDK_TOPDIR)/make/mapfiles/libattach/reorder-windows-$(OPENJDK_TARGET_CPU)
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LIBATTACH_LDLAGS_windows := -L$(notdir $(WIN_JAVA_LIB))
 +  endif
@@ -791,7 +818,7 @@ diff -r 65464a307408 make/lib/Lib-jdk.attach.gmk
  
 diff -r 65464a307408 make/lib/Lib-jdk.crypto.mscapi.gmk
 --- a/make/lib/Lib-jdk.crypto.mscapi.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.crypto.mscapi.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.crypto.mscapi.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -35,12 +35,13 @@
        LIBRARY := sunmscapi, \
        OUTPUT_DIR := $(INSTALL_LIBRARIES_HERE), \
@@ -809,7 +836,7 @@ diff -r 65464a307408 make/lib/Lib-jdk.crypto.mscapi.gmk
            -D "JDK_FNAME=sunmscapi.dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.internal.le.gmk
 --- a/make/lib/Lib-jdk.internal.le.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.internal.le.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.internal.le.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -44,7 +44,8 @@
        CFLAGS := $(CFLAGS_JDKLIB) $(LIBJAVA_HEADER_FLAGS)\
            $(LIBLE_CPPFLAGS), \
@@ -822,7 +849,7 @@ diff -r 65464a307408 make/lib/Lib-jdk.internal.le.gmk
            -D "JDK_FNAME=le.dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.jdwp.agent.gmk
 --- a/make/lib/Lib-jdk.jdwp.agent.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.jdwp.agent.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.jdwp.agent.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -47,9 +47,10 @@
      LDFLAGS := $(LDFLAGS_JDKLIB) \
          $(call SET_SHARED_LIBRARY_ORIGIN), \
@@ -837,14 +864,14 @@ diff -r 65464a307408 make/lib/Lib-jdk.jdwp.agent.gmk
          -D "JDK_FNAME=dt_socket.dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.management.agent.gmk
 --- a/make/lib/Lib-jdk.management.agent.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.management.agent.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.management.agent.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -32,6 +32,13 @@
      -I$(SUPPORT_OUTPUTDIR)/headers/jdk.management.agent \
      $(LIBJAVA_HEADER_FLAGS) \
      #
 +ifeq ($(OPENJDK_TARGET_OS), windows)
 +    ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+        LIBMANAGEMENT_AGENT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++        LIBMANAGEMENT_AGENT_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +    else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +        LIBMANAGEMENT_AGENT_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
 +    endif
@@ -865,13 +892,13 @@ diff -r 65464a307408 make/lib/Lib-jdk.management.agent.gmk
          -D "JDK_FNAME=management_agent.dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.management.gmk
 --- a/make/lib/Lib-jdk.management.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.management.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.management.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -44,6 +44,11 @@
    # a binary that is compatible with windows versions older than 7/2008R2.
    # See MSDN documentation for GetProcessMemoryInfo for more information.
    LIBMANAGEMENT_EXT_CFLAGS += -DPSAPI_VERSION=1
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+      LIBMANAGEMENT_EXT_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))"
++      LIBMANAGEMENT_EXT_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +      LIBMANAGEMENT_EXT_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
 +  endif
@@ -893,13 +920,13 @@ diff -r 65464a307408 make/lib/Lib-jdk.management.gmk
          -D "JDK_FNAME=management_ext.dll" \
 diff -r 65464a307408 make/lib/Lib-jdk.pack.gmk
 --- a/make/lib/Lib-jdk.pack.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.pack.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.pack.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -26,6 +26,11 @@
  include LibCommon.gmk
  
  ################################################################################
 +ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+    LIBPACK_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))" -map:$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/unpack.map -debug
++    LIBPACK_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))" -map:$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/unpack.map -debug
 +else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +    LIBPACK_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
 +endif
@@ -920,7 +947,7 @@ diff -r 65464a307408 make/lib/Lib-jdk.pack.gmk
      RC_FLAGS := $(RC_FLAGS) \
 diff -r 65464a307408 make/lib/Lib-jdk.security.auth.gmk
 --- a/make/lib/Lib-jdk.security.auth.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/Lib-jdk.security.auth.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/Lib-jdk.security.auth.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -47,8 +47,9 @@
      MAPFILE := $(LIBJAAS_MAPFILE), \
      LDFLAGS := $(LDFLAGS_JDKLIB) \
@@ -934,14 +961,14 @@ diff -r 65464a307408 make/lib/Lib-jdk.security.auth.gmk
          -D "JDK_FNAME=$(LIBJAAS_NAME).dll" \
 diff -r 65464a307408 make/lib/NetworkingLibraries.gmk
 --- a/make/lib/NetworkingLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/NetworkingLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/NetworkingLibraries.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -25,6 +25,14 @@
  
  LIBNET_SRC_DIRS := $(call FindSrcDirsForLib, java.base, net)
  
 +ifeq ($(OPENJDK_TARGET_OS), windows)
 +    ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+        LIBNET_LDFLAGS_windows := -delayload:secur32.dll -delayload:iphlpapi.dll
++        LIBNET_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))" -delayload:secur32.dll -delayload:iphlpapi.dll
 +    else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +        LIBNET_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB))
 +    endif
@@ -968,7 +995,7 @@ diff -r 65464a307408 make/lib/NetworkingLibraries.gmk
      RC_FLAGS := $(RC_FLAGS) \
 diff -r 65464a307408 make/lib/NioLibraries.gmk
 --- a/make/lib/NioLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/NioLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/NioLibraries.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -56,6 +56,15 @@
    BUILD_LIBNIO_MAPFILE := $(JDK_TOPDIR)/make/mapfiles/libnio/mapfile-$(OPENJDK_TARGET_OS)
  endif
@@ -976,7 +1003,7 @@ diff -r 65464a307408 make/lib/NioLibraries.gmk
 +
 +ifeq ($(OPENJDK_TARGET_OS), windows)
 +    ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+        LIBNIO_LDFLAGS_windows := /LIBPATH:"$(dir $(WIN_JAVA_LIB))" /LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libnet"
++        LIBNIO_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))" -LIBPATH:"$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libnet"
 +    else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +        LIBNIO_LDFLAGS_windows := -L$(dir $(WIN_JAVA_LIB)) -L$(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libnet
 +    endif
@@ -1006,15 +1033,15 @@ diff -r 65464a307408 make/lib/NioLibraries.gmk
      RC_FLAGS := $(RC_FLAGS) \
 diff -r 65464a307408 make/lib/SoundLibraries.gmk
 --- a/make/lib/SoundLibraries.gmk	Thu Aug 03 18:56:59 2017 +0000
-+++ b/make/lib/SoundLibraries.gmk	Fri Oct 27 19:28:57 2017 +0200
++++ b/make/lib/SoundLibraries.gmk	Sat Dec 16 14:17:48 2017 +0100
 @@ -67,6 +67,11 @@
        PLATFORM_API_WinOS_Ports.c
    LIBJSOUND_SRC_FILES += $(LIBJSOUND_MIDIFILES)
    LIBJSOUND_SRC_FILES += $(LIBJSOUND_PORTFILES)
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+      LIBJSOUND_LDFLAGS_windows := /LIBPATH:"$(dir $(JDKLIB_LIBS))"
++      LIBJSOUND_LDFLAGS_windows := -LIBPATH:"$(dir $(WIN_JAVA_LIB))"
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
-+      LIBJSOUND_LDFLAGS_windows := -L"$(dir $(JDKLIB_LIBS))"
++      LIBJSOUND_LDFLAGS_windows := -L"$(dir $(WIN_JAVA_LIB))"
 +  endif
  endif # OPENJDK_TARGET_OS windows
  
@@ -1039,7 +1066,7 @@ diff -r 65464a307408 make/lib/SoundLibraries.gmk
  ifneq ($(filter jsoundds, $(EXTRA_SOUND_JNI_LIBS)), )
  
 +  ifeq ($(TOOLCHAIN_TYPE), microsoft)
-+      LIBJSOUNDDS_LDFLAGS_windows := /LIBPATH:"$(dir $(JDKLIB_LIBS))"
++      LIBJSOUNDDS_LDFLAGS_windows := -LIBPATH:"$(dir $(JDKLIB_LIBS))"
 +  else ifeq ($(TOOLCHAIN_TYPE), gcc)
 +      LIBJSOUNDDS_LDFLAGS_windows := -L"$(dir $(JDKLIB_LIBS))"
 +  endif
@@ -1052,20 +1079,33 @@ diff -r 65464a307408 make/lib/SoundLibraries.gmk
        INCLUDE_FILES := Utilities.c $(LIBJSOUND_DAUDIOFILES) \
            PLATFORM_API_WinOS_DirectSound.cpp, \
        OPTIMIZATION := LOW, \
-@@ -197,7 +210,9 @@
+@@ -197,7 +210,8 @@
            -DUSE_DAUDIO=TRUE, \
        LDFLAGS := $(LDFLAGS_JDKLIB) $(LDFLAGS_CXX_JDK) \
            $(call SET_SHARED_LIBRARY_ORIGIN), \
 -      LIBS := $(JDKLIB_LIBS) dsound.lib winmm.lib user32.lib ole32.lib, \
-+      LDFLAGS_windows := $(LIBJSOUNDDS_LDFLAGS_windows), \
 +      LIBS := $(JDKLIB_LIBS), \
 +      LIBS_windows := dsound.lib winmm.lib user32.lib ole32.lib, \
        VERSIONINFO_RESOURCE := $(GLOBAL_VERSION_INFO_RESOURCE), \
        RC_FLAGS := $(RC_FLAGS) \
            -D "JDK_FNAME=jsoundds.dll" \
+diff -r 65464a307408 src/java.base/share/native/libjava/jni_util.h
+--- a/src/java.base/share/native/libjava/jni_util.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/share/native/libjava/jni_util.h	Sat Dec 16 14:17:48 2017 +0100
+@@ -394,8 +394,8 @@
+ void buildJniFunctionName(const char *sym, const char *cname,
+                           char *jniEntryName);
+ 
+-extern size_t getLastErrorString(char *buf, size_t len);
+-extern int getErrorString(int err, char *buf, size_t len);
++extern JNIEXPORT size_t getLastErrorString(char *buf, size_t len);
++extern JNIEXPORT int getErrorString(int err, char *buf, size_t len);
+ 
+ #ifdef STATIC_BUILD
+ /* Macros for handling declaration of static/dynamic
 diff -r 65464a307408 src/java.base/share/native/libjava/sizecalc.h
 --- a/src/java.base/share/native/libjava/sizecalc.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libjava/sizecalc.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/share/native/libjava/sizecalc.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -56,7 +56,7 @@
  
  /* Helper macros */
@@ -1077,7 +1117,7 @@ diff -r 65464a307408 src/java.base/share/native/libjava/sizecalc.h
  #define FAILURE_RESULT NULL
 diff -r 65464a307408 src/java.base/share/native/libjimage/jimage.cpp
 --- a/src/java.base/share/native/libjimage/jimage.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libjimage/jimage.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/share/native/libjimage/jimage.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -55,7 +55,7 @@
   *   }
   *   ...
@@ -1143,7 +1183,7 @@ diff -r 65464a307408 src/java.base/share/native/libjimage/jimage.cpp
  
 diff -r 65464a307408 src/java.base/share/native/libjimage/jimage.hpp
 --- a/src/java.base/share/native/libjimage/jimage.hpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libjimage/jimage.hpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/share/native/libjimage/jimage.hpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -72,7 +72,7 @@
   *   ...
   */
@@ -1207,20 +1247,9 @@ diff -r 65464a307408 src/java.base/share/native/libjimage/jimage.hpp
                                      char* path, size_t max);
  
  typedef bool (*JImage_ResourcePath_t)(JImageFile* jimage, JImageLocationRef location,
-diff -r 65464a307408 src/java.base/share/native/libverify/check_code.c
---- a/src/java.base/share/native/libverify/check_code.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libverify/check_code.c	Fri Oct 27 19:28:57 2017 +0200
-@@ -1390,6 +1390,7 @@
-     case JVM_OPC_invokedynamic:
-         CCerror(context,
-                 "invokedynamic bytecode is not supported in this class file version");
-+                __attribute__ ((fallthrough));
- 
-     case JVM_OPC_instanceof:
-     case JVM_OPC_checkcast:
 diff -r 65464a307408 src/java.base/share/native/libzip/CRC32.c
 --- a/src/java.base/share/native/libzip/CRC32.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libzip/CRC32.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/share/native/libzip/CRC32.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -54,7 +54,7 @@
      return crc;
  }
@@ -1232,13 +1261,13 @@ diff -r 65464a307408 src/java.base/share/native/libzip/CRC32.c
      return crc32(crc, (Bytef*)buf, len);
 diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
 --- a/src/java.base/share/native/libzip/zip_util.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libzip/zip_util.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/share/native/libzip/zip_util.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -881,7 +881,7 @@
   * set to the error message text if msg != 0. Otherwise, *msg will be
   * set to NULL. Caller doesn't need to free the error message.
   */
 -jzfile * JNICALL
-+jzfile * JNIEXPORT
++JNIEXPORT jzfile * JNICALL
  ZIP_Open(const char *name, char **pmsg)
  {
      jzfile *file = ZIP_Open_Generic(name, pmsg, O_RDONLY, 0);
@@ -1247,7 +1276,7 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
   * Closes the specified zip file object.
   */
 -void JNICALL
-+void JNIEXPORT
++JNIEXPORT void JNICALL
  ZIP_Close(jzfile *zip)
  {
      MLOCK(zfiles_lock);
@@ -1256,7 +1285,7 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
   */
  
 -void JNICALL
-+void JNIEXPORT
++JNIEXPORT void JNICALL
  ZIP_FreeEntry(jzfile *jz, jzentry *ze)
  {
      jzentry *last;
@@ -1265,7 +1294,7 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
   * specified index was out of range.
   */
 -jzentry * JNICALL
-+jzentry * JNIEXPORT
++JNIEXPORT jzentry * JNICALL
  ZIP_GetNextEntry(jzfile *zip, jint n)
  {
      jzentry *result;
@@ -1274,7 +1303,7 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
   * has the size bigger than 2**32 bytes in ONE invocation.
   */
 -jzentry * JNICALL
-+jzentry * JNIEXPORT
++JNIEXPORT jzentry * JNICALL
  ZIP_FindEntry(jzfile *zip, char *name, jint *sizeP, jint *nameLenP)
  {
      jzentry *entry = ZIP_GetEntry(zip, name, 0);
@@ -1283,7 +1312,7 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
   * so we have to be careful to maintain the expected behaviour.
   */
 -jboolean JNICALL
-+jboolean JNIEXPORT
++JNIEXPORT jboolean JNICALL
  ZIP_ReadEntry(jzfile *zip, jzentry *entry, unsigned char *buf, char *entryname)
  {
      char *msg;
@@ -1292,31 +1321,31 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.c
  }
  
 -jboolean JNICALL
-+jboolean JNIEXPORT
++JNIEXPORT jboolean JNICALL
  ZIP_InflateFully(void *inBuf, jlong inLen, void *outBuf, jlong outLen, char **pmsg)
  {
      z_stream strm;
 diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.h
 --- a/src/java.base/share/native/libzip/zip_util.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/share/native/libzip/zip_util.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/share/native/libzip/zip_util.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -239,16 +239,16 @@
   */
  #define ZIP_ENDCHAIN ((jint)-1)
  
 -jzentry * JNICALL
-+jzentry * JNIEXPORT
++JNIEXPORT jzentry * JNICALL
  ZIP_FindEntry(jzfile *zip, char *name, jint *sizeP, jint *nameLenP);
  
 -jboolean JNICALL
-+jboolean JNIEXPORT
++JNIEXPORT jboolean JNICALL
  ZIP_ReadEntry(jzfile *zip, jzentry *entry, unsigned char *buf, char *entrynm);
  
 -jzentry * JNICALL
-+jzentry * JNIEXPORT
++JNIEXPORT jzentry * JNICALL
  ZIP_GetNextEntry(jzfile *zip, jint n);
  
 -jzfile * JNICALL
-+jzfile * JNIEXPORT
++JNIEXPORT jzfile * JNICALL
  ZIP_Open(const char *name, char **pmsg);
  
  jzfile *
@@ -1325,7 +1354,7 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.h
  ZIP_Put_In_Cache0(const char *name, ZFILE zfd, char **pmsg, jlong lastModified, jboolean usemmap);
  
 -void JNICALL
-+void JNIEXPORT
++JNIEXPORT void JNICALL
  ZIP_Close(jzfile *zip);
  
  jzentry * ZIP_GetEntry(jzfile *zip, char *name, jint ulen);
@@ -1333,19 +1362,40 @@ diff -r 65464a307408 src/java.base/share/native/libzip/zip_util.h
  void ZIP_Unlock(jzfile *zip);
  jint ZIP_Read(jzfile *zip, jzentry *entry, jlong pos, void *buf, jint len);
 -void JNICALL
-+void JNIEXPORT
++JNIEXPORT void JNICALL
  ZIP_FreeEntry(jzfile *zip, jzentry *ze);
  jlong ZIP_GetEntryDataOffset(jzfile *zip, jzentry *entry);
  jzentry * ZIP_GetEntry2(jzfile *zip, char *name, jint ulen, jboolean addSlash);
  
 -jboolean JNICALL
-+jboolean JNIEXPORT
++JNIEXPORT jboolean JNICALL
  ZIP_InflateFully(void *inBuf, jlong inLen, void *outBuf, jlong outLen, char **pmsg);
  
  #endif /* !_ZIP_H_ */
+diff -r 65464a307408 src/java.base/windows/native/include/jni_md.h
+--- a/src/java.base/windows/native/include/jni_md.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/include/jni_md.h	Sat Dec 16 14:17:48 2017 +0100
+@@ -28,7 +28,17 @@
+ 
+ #define JNIEXPORT __declspec(dllexport)
+ #define JNIIMPORT __declspec(dllimport)
++
++#if defined(_MSC_VER)
+ #define JNICALL __stdcall
++#elif defined(__MINGW64__)
++#define JNICALL __stdcall
++#elif defined(__MINGW32__)
++// on 32-bit MINGW __stdcall results mangling/decoration of function names
++// like _JNI_CreateJavaVM@12
++// therefore __stdcall is not needed
++#define JNICALL 
++#endif
+ 
+ typedef long jint;
+ typedef __int64 jlong;
 diff -r 65464a307408 src/java.base/windows/native/libjava/ProcessEnvironment_md.c
 --- a/src/java.base/windows/native/libjava/ProcessEnvironment_md.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libjava/ProcessEnvironment_md.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libjava/ProcessEnvironment_md.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -59,11 +59,11 @@
              ;
  
@@ -1362,7 +1412,7 @@ diff -r 65464a307408 src/java.base/windows/native/libjava/ProcessEnvironment_md.
  }
 diff -r 65464a307408 src/java.base/windows/native/libjava/ProcessHandleImpl_win.c
 --- a/src/java.base/windows/native/libjava/ProcessHandleImpl_win.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libjava/ProcessHandleImpl_win.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libjava/ProcessHandleImpl_win.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -31,6 +31,7 @@
  #include "java_lang_ProcessHandleImpl_Info.h"
  
@@ -1382,7 +1432,7 @@ diff -r 65464a307408 src/java.base/windows/native/libjava/ProcessHandleImpl_win.
          (*env)->SetObjectField(env, jinfo,
 diff -r 65464a307408 src/java.base/windows/native/libjava/io_util_md.c
 --- a/src/java.base/windows/native/libjava/io_util_md.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libjava/io_util_md.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libjava/io_util_md.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -223,7 +223,7 @@
      return pathbuf;
  }
@@ -1401,9 +1451,28 @@ diff -r 65464a307408 src/java.base/windows/native/libjava/io_util_md.c
  handleLseek(FD fd, jlong offset, jint whence)
  {
      LARGE_INTEGER pos, distance;
+diff -r 65464a307408 src/java.base/windows/native/libjava/io_util_md.h
+--- a/src/java.base/windows/native/libjava/io_util_md.h	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libjava/io_util_md.h	Sat Dec 16 14:17:48 2017 +0100
+@@ -49,13 +49,13 @@
+ jint handleWrite(FD fd, const void *buf, jint len);
+ jint handleAppend(FD fd, const void *buf, jint len);
+ jint handleClose(JNIEnv *env, jobject this, jfieldID fid);
+-jlong handleLseek(FD fd, jlong offset, jint whence);
++JNIEXPORT jlong handleLseek(FD fd, jlong offset, jint whence);
+ 
+ /*
+  * Returns an opaque handle to file named by "path".  If an error occurs,
+  * returns -1 and an exception is pending.
+  */
+-FD winFileHandleOpen(JNIEnv *env, jstring path, int flags);
++JNIEXPORT FD winFileHandleOpen(JNIEnv *env, jstring path, int flags);
+ 
+ /*
+  * Macros to set/get fd from the java.io.FileDescriptor.
 diff -r 65464a307408 src/java.base/windows/native/libjava/java_props_md.c
 --- a/src/java.base/windows/native/libjava/java_props_md.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libjava/java_props_md.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libjava/java_props_md.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -208,22 +208,27 @@
      static WCHAR *u_path = NULL;
      if (u_path == NULL) {
@@ -1434,7 +1503,7 @@ diff -r 65464a307408 src/java.base/windows/native/libjava/java_props_md.c
              WCHAR path[MAX_PATH+1];
 diff -r 65464a307408 src/java.base/windows/native/libjava/jni_util_md.c
 --- a/src/java.base/windows/native/libjava/jni_util_md.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libjava/jni_util_md.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libjava/jni_util_md.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -74,7 +74,7 @@
      return;
  }
@@ -1453,14 +1522,39 @@ diff -r 65464a307408 src/java.base/windows/native/libjava/jni_util_md.c
  getErrorString(int err, char *buf, size_t len)
  {
      int ret = 0;
+diff -r 65464a307408 src/java.base/windows/native/libnet/Inet4AddressImpl.c
+--- a/src/java.base/windows/native/libnet/Inet4AddressImpl.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.base/windows/native/libnet/Inet4AddressImpl.c	Sat Dec 16 14:17:48 2017 +0100
+@@ -457,6 +457,21 @@
+     return JNI_FALSE;
+ }
+ 
++#if defined(WIN32)
++DWORD WINAPI IcmpSendEcho2Ex(HANDLE, 
++    HANDLE, 
++    LPVOID, 
++    PVOID, 
++    IPAddr, 
++    IPAddr, 
++    LPVOID, 
++    WORD, 
++    LPVOID, 
++    LPVOID, 
++    DWORD, 
++    DWORD); 
++#endif
++
+ /**
+  * ping implementation.
+  * Send a ICMP_ECHO_REQUEST packet every second until either the timeout
 diff -r 65464a307408 src/java.base/windows/native/libnet/Inet6AddressImpl.c
 --- a/src/java.base/windows/native/libnet/Inet6AddressImpl.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libnet/Inet6AddressImpl.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libnet/Inet6AddressImpl.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -30,6 +30,18 @@
  #include "java_net_Inet4AddressImpl.h"
  #include "java_net_Inet6AddressImpl.h"
  
-+#if !defined(ICMPV6_ECHO_REPLY)  
++#if !defined(ICMPV6_ECHO_REPLY) && !defined (_MSC_VER)
 +
 +    typedef struct icmpv6_echo_reply_lh {
 +    IPV6_ADDRESS_EX Address;
@@ -1477,7 +1571,7 @@ diff -r 65464a307408 src/java.base/windows/native/libnet/Inet6AddressImpl.c
   */
 diff -r 65464a307408 src/java.base/windows/native/libnet/NetworkInterface_winXP.c
 --- a/src/java.base/windows/native/libnet/NetworkInterface_winXP.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.base/windows/native/libnet/NetworkInterface_winXP.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.base/windows/native/libnet/NetworkInterface_winXP.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -34,7 +34,7 @@
   */
  
@@ -1489,7 +1583,7 @@ diff -r 65464a307408 src/java.base/windows/native/libnet/NetworkInterface_winXP.
  void printnif (netif *nif) {
 diff -r 65464a307408 src/java.desktop/share/native/common/awt/medialib/mlib_sys.c
 --- a/src/java.desktop/share/native/common/awt/medialib/mlib_sys.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/share/native/common/awt/medialib/mlib_sys.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/share/native/common/awt/medialib/mlib_sys.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -86,7 +86,7 @@
  
  void *__mlib_malloc(mlib_u32 size)
@@ -1508,9 +1602,21 @@ diff -r 65464a307408 src/java.desktop/share/native/common/awt/medialib/mlib_sys.
  }
  
  void *__mlib_realloc(void *ptr, mlib_u32 size)
+diff -r 65464a307408 src/java.desktop/share/native/liblcms/LCMS.c
+--- a/src/java.desktop/share/native/liblcms/LCMS.c	Thu Aug 03 18:56:59 2017 +0000
++++ b/src/java.desktop/share/native/liblcms/LCMS.c	Sat Dec 16 14:17:48 2017 +0100
+@@ -30,7 +30,7 @@
+ #include "jni_util.h"
+ #include "Trace.h"
+ #include "Disposer.h"
+-#include <lcms2.h>
++#include "lcms2.h"
+ #include "jlong.h"
+ 
+ 
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp
 --- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DContext.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -47,7 +47,7 @@
   * factors) used in SetRenderState(), indexed by the rule constants from the
   * AlphaComposite class.
@@ -1534,7 +1640,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DContex
      extraAlpha = ea;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp
 --- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphCache.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -27,7 +27,7 @@
  #include "D3DTextRenderer.h"
  #include "D3DRenderQueue.h"
@@ -1546,7 +1652,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DGlyphC
  HRESULT
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h
 --- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeline.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -30,7 +30,7 @@
  
  /* Use THIS_FILE when it is available. */
@@ -1594,7 +1700,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DPipeli
      } else do { } while (0)
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp
 --- a/src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertexCacher.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -29,6 +29,11 @@
  
  #include "math.h"
@@ -1609,12 +1715,15 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/java2d/d3d/D3DVertex
  #define ADD_VERTEX_XYC(X, Y, VCOLOR) \
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/alloc.h
 --- a/src/java.desktop/windows/native/libawt/windows/alloc.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/alloc.h	Fri Oct 27 19:28:57 2017 +0200
-@@ -36,9 +36,13 @@
++++ b/src/java.desktop/windows/native/libawt/windows/alloc.h	Sat Dec 16 14:17:48 2017 +0100
+@@ -36,9 +36,16 @@
  // By defining std::bad_alloc in a local header file instead of including
  // the Standard C++ <new> header file, we avoid making awt.dll dependent
  // on msvcp50.dll. This reduces the size of the JRE by 500kb.
-+#if defined(_MSC_VER)
++// FIXME: It seems to mee that it is not working with VSE 2013
++// <new> is included with STL, and this always generates errors 
++//#if defined(_MSC_VER)
++#if 0
  namespace std {
      class bad_alloc {};
  }
@@ -1624,11 +1733,12 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/alloc.h
  
  #define SIZECALC_ALLOC_THROWING_BAD_ALLOC
  #include "sizecalc.h"
-@@ -83,12 +87,14 @@
+@@ -83,12 +90,15 @@
  #error Multiple defintions of CATCH_BAD_ALLOC_RET_NO_JNI
  #endif
  
-+#if defined(_MSC_VER)
++//#if defined(_MSC_VER)
++#if 0
  // The unsafe versions of malloc, calloc, and realloc should not be used
  #define malloc Do_Not_Use_malloc_Use_safe_Malloc_Instead
  #define calloc Do_Not_Use_calloc_Use_safe_Calloc_Instead
@@ -1641,7 +1751,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/alloc.h
  // instead of returning 0. safe_Realloc will return 0 if memblock is not
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt.h
 --- a/src/java.desktop/windows/native/libawt/windows/awt.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -324,7 +324,7 @@
      jsize  m_dwSize;
      LPWSTR getNonEmptyString() {
@@ -1653,7 +1763,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt.h
  
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Canvas.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -213,11 +213,11 @@
  
      PDATA pData;
@@ -1670,7 +1780,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Canvas.c
      delete sebs;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Choice.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -205,7 +205,7 @@
  {
      int itemHeight =(int)::SendMessage(GetHWnd(), CB_GETITEMHEIGHT, (UINT)0,0);
@@ -1682,7 +1792,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Choice.c
      // fudge factor of 1/2 line to ensure last line shows
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Component.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Component.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Component.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Component.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -3538,7 +3538,7 @@
          } // ctrlIsDown
      } // modifiers
@@ -1731,7 +1841,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Componen
      CATCH_BAD_ALLOC_RET(NULL);
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Component.h
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Component.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Component.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Component.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -446,7 +446,7 @@
      static void JavaKeyToWindowsKey(UINT javaKey, UINT *windowsKey, UINT *modifiers, UINT originalWindowsKey);
      static void UpdateDynPrimaryKeymap(UINT wkey, UINT jkeyLegacy, jint keyLocation, UINT modifiers);
@@ -1743,7 +1853,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Componen
          JavaKeyToWindowsKey(javaKey, windowsKey, modifiers, IGNORE_KEY);
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DataTransferer.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -683,7 +683,7 @@
              VERIFY(::DPtoLP(hdc, &p, 1));
              //In accordance with CreateEnhMetaFile documentation the rectangle have to
@@ -1764,7 +1874,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DataTran
                  hr = HRESULT_FROM_WIN32(::GetLastError());
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Debug.h
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Debug.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Debug.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Debug.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -70,7 +70,9 @@
          #define THIS_FILE __FILE__
      #endif
@@ -1777,7 +1887,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Debug.h
      #define UNIMPLEMENTED()     DASSERT(FALSE)
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Desktop.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -92,7 +92,7 @@
      JNU_ReleaseStringPlatformChars(env, fileOrUri_j, fileOrUri_c);
      JNU_ReleaseStringPlatformChars(env, verb_j, verb_c);
@@ -1789,7 +1899,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Desktop.
          int len = ::FormatMessage(
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DesktopProperties.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -559,7 +559,7 @@
      int cydrag = GetSystemMetrics(SM_CYDRAG);
      SetIntegerProperty(TEXT("win.drag.width"), cxdrag);
@@ -1801,12 +1911,16 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DesktopP
      SetIntegerProperty(TEXT("awt.multiClickInterval"), GetDoubleClickTime());
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp	Fri Oct 27 19:28:57 2017 +0200
-@@ -24,10 +24,12 @@
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cpp	Sat Dec 16 14:17:48 2017 +0100
+@@ -24,10 +24,16 @@
   */
  
  #pragma push_macro("bad_alloc")
-+#if defined(_MSC_VER)
++//#if defined(_MSC_VER)
++#if 0
++// FIXME: It seems to mee that it is not working with VSE 2013
++// <new> is included with STL, and this always generates errors 
++
  //"bad_alloc" would be introduced in STL as "std::zbad_alloc" and discarded by linker
  //by this action we avoid the conflict with AWT implementation of "bad_alloc"
  //we need <new> inclusion for STL "new" oprators set.
@@ -1815,9 +1929,25 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DnDDS.cp
  #include <new>
  
  #if defined(_DEBUG) || defined(DEBUG)
+@@ -36,12 +42,13 @@
+ #endif
+ #include <map>
+ 
+-#pragma pop_macro("bad_alloc")
+-//"bad_alloc" is undefined from here
+ 
+ #include <awt.h>
+ #include <shlobj.h>
+ 
++#pragma pop_macro("bad_alloc")
++//"bad_alloc" is undefined from here
++
+ #include "jlong.h"
+ #include "awt_DataTransferer.h"
+ #include "awt_DnDDS.h"
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -27,6 +27,7 @@
  #include <shlwapi.h>
  #include <shellapi.h>
@@ -1923,7 +2053,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_DnDDT.cp
          STATSTG st;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Font.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Font.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Font.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Font.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -589,7 +589,7 @@
      jint intWidths[256];
      memset(intWidths, 0, 256 * sizeof(int));
@@ -1960,7 +2090,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Font.cpp
      VERIFY(::SelectObject(hDC, oldFont));
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Frame.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -1352,7 +1352,7 @@
      PDATA pData;
      JNI_CHECK_PEER_GOTO(self, ret);
@@ -1972,7 +2102,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Frame.cp
          DASSERT(!IsBadReadPtr(f, sizeof(AwtFrame)));
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_List.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_List.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_List.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_List.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -824,9 +824,9 @@
  
      jobject selfGlobalRef = env->NewGlobalRef(self);
@@ -1998,7 +2128,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_List.cpp
      CATCH_BAD_ALLOC_RET(FALSE);
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_MenuItem.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -650,7 +650,7 @@
  
      // Square the rectangle, so the check is proportional.
@@ -2010,7 +2140,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_MenuItem
      rect.top += diff - bottom;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -903,9 +903,9 @@
   * Copy settings from print dialog & any devmode back into attributes
   * or properties.
@@ -2044,17 +2174,21 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintCon
                  pdFlags |= PD_PRINTTOFILE;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h
 --- a/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h	Fri Oct 27 19:28:57 2017 +0200
-@@ -132,4 +132,6 @@
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintControl.h	Sat Dec 16 14:17:48 2017 +0100
+@@ -132,4 +132,10 @@
  
  };
  
-+void setCapabilities(JNIEnv *env, jobject WPrinterJob, HDC hdc);
-+
++#if defined(_MSC_VER)
++extern "C" void setCapabilities(JNIEnv *env, jobject WPrinterJob, HDC hdc);
++#else
++extern void setCapabilities(JNIEnv *env, jobject WPrinterJob, HDC hdc);
  #endif
++
++#endif
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h
 --- a/src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintDialog.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -35,10 +35,10 @@
  
  class AwtPrintDialog {
@@ -2072,7 +2206,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintDia
  
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_PrintJob.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -60,8 +60,9 @@
   * WPrintJob native methods
   */
@@ -2177,13 +2311,13 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_PrintJob
      CATCH_BAD_ALLOC;
  }
  
-+#if defined(_MSC_Ver)
++#if defined(_MSC_VER)
  } /* extern "C" */
 +#endif //_MSC_Ver
 \ No newline at end of file
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_TextComponent.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -754,7 +754,7 @@
   * WTextComponentPeer native methods
   */
@@ -2201,7 +2335,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_TextComp
 +//} /* extern "C" */
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_TrayIcon.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -788,6 +788,7 @@
  
      PDATA pData;
@@ -2220,7 +2354,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_TrayIcon
      delete uis;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Window.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_Window.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_Window.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_Window.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -1024,10 +1024,11 @@
  
      PDATA pData;
@@ -2351,7 +2485,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_Window.c
      CATCH_BAD_ALLOC_RET(JNI_FALSE);
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_new.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_new.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_new.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_new.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -59,12 +59,14 @@
      DASSERT(thread_seeded != TLS_OUT_OF_INDEXES);
  #endif
@@ -2369,7 +2503,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_new.cpp
  // Called when malloc or operator new runs out of memory. We try to
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_ole.cpp
 --- a/src/java.desktop/windows/native/libawt/windows/awt_ole.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_ole.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_ole.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -32,8 +32,15 @@
    //inline void DbgOut(LPCTSTR lpStr) { ::OutputDebugString(lpStr); }
  
@@ -2389,7 +2523,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_ole.cpp
          struct _timeb tb;
 diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_ole.h
 --- a/src/java.desktop/windows/native/libawt/windows/awt_ole.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libawt/windows/awt_ole.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libawt/windows/awt_ole.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -30,6 +30,7 @@
  #include <ole2.h>
  #include <comdef.h>
@@ -2450,7 +2584,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libawt/windows/awt_ole.h
  #define _VE      _variant_t()
 diff -r 65464a307408 src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c
 --- a/src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.desktop/windows/native/libsplashscreen/splashscreen_sys.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -149,7 +149,7 @@
          return;
      if (splash->currentFrame < 0 || splash->currentFrame >= splash->frameCount)
@@ -2462,7 +2596,7 @@ diff -r 65464a307408 src/java.desktop/windows/native/libsplashscreen/splashscree
          return;
 diff -r 65464a307408 src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c
 --- a/src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/java.security.jgss/windows/native/libw2k_lsa_auth/NativeCreds.c	Sat Dec 16 14:17:48 2017 +0100
 @@ -77,7 +77,7 @@
  
  BOOL PackageConnectLookup(PHANDLE,PULONG);
@@ -2474,7 +2608,7 @@ diff -r 65464a307408 src/java.security.jgss/windows/native/libw2k_lsa_auth/Nativ
  
 diff -r 65464a307408 src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp
 --- a/src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/jabswitch/jabswitch.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -187,13 +187,17 @@
      char path[_MAX_PATH];
      char tempPath[_MAX_PATH];
@@ -2523,7 +2657,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/jabswitch/jabswitch.cp
  }
 diff -r 65464a307408 src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp
 --- a/src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/jaccesswalker/jaccesswalker.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -527,7 +527,7 @@
          tvi.mask = TVIF_PARAM | TVIF_TEXT;
          tvi.pszText = (char *) s; // Accessible name and role
@@ -2544,7 +2678,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/jaccesswalker/jaccessw
          tvis.hParent = treeNodeParent;
 diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp
 --- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeATInstance.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -197,7 +197,7 @@
      event_struct->winAccessBridgeWindow = ABHandleToLong(winAccessBridgeWindow);
      if(!JavaBridgeThreadId)
@@ -2556,7 +2690,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/Ac
      PostThreadMessage(JavaBridgeThreadId,WM_USER,(WPARAM)event_struct,0);
 diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp
 --- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -983,7 +983,7 @@
      if (setTextContentsMethod != (jmethodID) 0) {
  
@@ -2838,7 +2972,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/Ac
                                     decrementReferenceMethod, js);
 diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h
 --- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/AccessBridgeJavaEntryPoints.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -32,6 +32,11 @@
  #include <windows.h>
  #include <jni.h>
@@ -2853,7 +2987,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/Ac
  
 diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp
 --- a/src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/libjavaaccessbridge/JavaAccessBridge.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -1726,7 +1726,7 @@
      PackageType *type = (PackageType *) buffer;
      PropertyCaretChangePackage *pkg = (PropertyCaretChangePackage *) (buffer + sizeof(PackageType));
@@ -3090,7 +3224,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/libjavaaccessbridge/Ja
          ds->FreeDrawingSurfaceInfo(dsi);
 diff -r 65464a307408 src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp
 --- a/src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.accessibility/windows/native/libwindowsaccessbridge/WinAccessBridge.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -860,7 +860,7 @@
      PackageType *type = (PackageType *) buffer;
      IsJavaWindowPackage *pkg = (IsJavaWindowPackage *) (buffer + sizeof(PackageType));
@@ -3120,7 +3254,7 @@ diff -r 65464a307408 src/jdk.accessibility/windows/native/libwindowsaccessbridge
              *AccessibleContext = pkg->rAccessibleContext;
 diff -r 65464a307408 src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp
 --- a/src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -51,10 +51,18 @@
  #define SIGNATURE_EXCEPTION "java/security/SignatureException"
  #define OUT_OF_MEMORY_ERROR "java/lang/OutOfMemoryError"
@@ -3186,7 +3320,7 @@ diff -r 65464a307408 src/jdk.crypto.mscapi/windows/native/libsunmscapi/security.
 \ No newline at end of file
 diff -r 65464a307408 src/jdk.pack/share/native/common-unpack/defines.h
 --- a/src/jdk.pack/share/native/common-unpack/defines.h	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.pack/share/native/common-unpack/defines.h	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.pack/share/native/common-unpack/defines.h	Sat Dec 16 14:17:48 2017 +0100
 @@ -25,7 +25,7 @@
  
  // random definitions
@@ -3207,7 +3341,7 @@ diff -r 65464a307408 src/jdk.pack/share/native/common-unpack/defines.h
  #define MKDIR(dir)      mkdir(dir)
 diff -r 65464a307408 src/jdk.pack/share/native/common-unpack/zip.cpp
 --- a/src/jdk.pack/share/native/common-unpack/zip.cpp	Thu Aug 03 18:56:59 2017 +0000
-+++ b/src/jdk.pack/share/native/common-unpack/zip.cpp	Fri Oct 27 19:28:57 2017 +0200
++++ b/src/jdk.pack/share/native/common-unpack/zip.cpp	Sat Dec 16 14:17:48 2017 +0100
 @@ -416,10 +416,15 @@
      ((uLong)h << 11) | ((uLong)m << 5) | ((uLong)s >> 1);
  }
@@ -3224,3 +3358,15 @@ diff -r 65464a307408 src/jdk.pack/share/native/common-unpack/zip.cpp
  #endif
  /*
   * Return the Unix time in DOS format
+diff -r 65464a307408 test/java/net/InetAddress/TestHosts
+--- a/test/java/net/InetAddress/TestHosts	Thu Aug 03 18:56:59 2017 +0000
++++ b/test/java/net/InetAddress/TestHosts	Sat Dec 16 14:17:48 2017 +0100
+@@ -1,4 +1,4 @@
+-# test hosts file for internal NameService 
+-10.2.3.4 testHost.testDomain
+-10.5.6.7 testHost.testDomain
+-10.8.9.10 
++# test hosts file for internal NameService 
++10.2.3.4 testHost.testDomain
++10.5.6.7 testHost.testDomain
++10.8.9.10 

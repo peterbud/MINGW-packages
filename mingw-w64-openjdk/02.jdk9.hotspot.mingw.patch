@@ -1,6 +1,6 @@
 diff -r b756e7a2ec33 make/gensrc/GensrcAdlc.gmk
 --- a/make/gensrc/GensrcAdlc.gmk	Thu Aug 03 18:56:57 2017 +0000
-+++ b/make/gensrc/GensrcAdlc.gmk	Fri Oct 27 19:28:15 2017 +0200
++++ b/make/gensrc/GensrcAdlc.gmk	Sat Dec 16 14:16:28 2017 +0100
 @@ -44,11 +44,15 @@
      ADLC_LDFLAGS := -q64
      ADLC_CFLAGS := -qnortti -qeh -q64 -DAIX
@@ -24,7 +24,7 @@ diff -r b756e7a2ec33 make/gensrc/GensrcAdlc.gmk
    # Set the C++ standard if supported
 diff -r b756e7a2ec33 make/lib/CompileGtest.gmk
 --- a/make/lib/CompileGtest.gmk	Thu Aug 03 18:56:57 2017 +0000
-+++ b/make/lib/CompileGtest.gmk	Fri Oct 27 19:28:15 2017 +0200
++++ b/make/lib/CompileGtest.gmk	Sat Dec 16 14:16:28 2017 +0100
 @@ -52,6 +52,13 @@
  	$(call create-mapfile)
  endif
@@ -48,24 +48,39 @@ diff -r b756e7a2ec33 make/lib/CompileGtest.gmk
      CFLAGS_solaris := -DGTEST_HAS_EXCEPTIONS=0 -library=stlport4, \
      CFLAGS_macosx := -DGTEST_OS_MAC=1, \
      CFLAGS_aix := -qpic=large, \
-@@ -114,12 +121,12 @@
+@@ -104,6 +111,14 @@
+ 
+ ################################################################################
+ 
++ifeq ($(OPENJDK_TARGET_OS)-$(TOOLCHAIN_TYPE), windows-microsoft)
++    GTEST_LAUNCHER_LDFLAGS_windows := $(LDFLAGS_JDKEXE) -LIBPATH:"$(JVM_OUTPUTDIR)/gtest/objs"
++    GTEST_LAUNCHER_LIBS_windows := jvm.lib 
++else ifeq ($(OPENJDK_TARGET_OS)-$(TOOLCHAIN_TYPE), windows-gcc)
++    GTEST_LAUNCHER_LDFLAGS_windows := $(LDFLAGS_JDKEXE) -L$(JVM_OUTPUTDIR)/gtest/objs
++    GTEST_LAUNCHER_LIBS_windows := jvm.lib ssp.lib
++endif
++
+ $(eval $(call SetupNativeCompilation, BUILD_GTEST_LAUNCHER, \
+     TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
+     PROGRAM := gtestLauncher, \
+@@ -114,12 +129,12 @@
          -I$(GTEST_FRAMEWORK_SRC)/include, \
      CFLAGS_DEBUG_SYMBOLS := $(JVM_CFLAGS_SYMBOLS), \
      CXXFLAGS_DEBUG_SYMBOLS := $(JVM_CFLAGS_SYMBOLS), \
 -    LDFLAGS := $(LDFLAGS_JDKEXE), \
-+    LDFLAGS := $(LDFLAGS_JDKEXE) -L$(JVM_OUTPUTDIR)/gtest, \
++    LDFLAGS := $(GTEST_LAUNCHER_LDFLAGS_windows), \
      LDFLAGS_unix := -L$(JVM_OUTPUTDIR)/gtest $(call SET_SHARED_LIBRARY_ORIGIN), \
      LDFLAGS_solaris := -library=stlport4, \
      LIBS_linux := $(LIBCXX), \
      LIBS_unix := -ljvm, \
 -    LIBS_windows := $(JVM_OUTPUTDIR)/gtest/objs/jvm.lib, \
-+    LIBS_windows := jvm.lib, \
++    LIBS_windows := $(GTEST_LAUNCHER_LIBS_windows), \
      COPY_DEBUG_SYMBOLS := $(GTEST_COPY_DEBUG_SYMBOLS), \
      ZIP_EXTERNAL_DEBUG_SYMBOLS := false, \
  ))
 diff -r b756e7a2ec33 make/lib/CompileJvm.gmk
 --- a/make/lib/CompileJvm.gmk	Thu Aug 03 18:56:57 2017 +0000
-+++ b/make/lib/CompileJvm.gmk	Fri Oct 27 19:28:15 2017 +0200
++++ b/make/lib/CompileJvm.gmk	Sat Dec 16 14:16:28 2017 +0100
 @@ -189,9 +189,9 @@
  
  ifeq ($(OPENJDK_TARGET_OS), windows)
@@ -80,7 +95,7 @@ diff -r b756e7a2ec33 make/lib/CompileJvm.gmk
  JVM_OPTIMIZATION ?= HIGHEST_JVM
 diff -r b756e7a2ec33 make/lib/JvmMapfile.gmk
 --- a/make/lib/JvmMapfile.gmk	Thu Aug 03 18:56:57 2017 +0000
-+++ b/make/lib/JvmMapfile.gmk	Fri Oct 27 19:28:15 2017 +0200
++++ b/make/lib/JvmMapfile.gmk	Sat Dec 16 14:16:28 2017 +0100
 @@ -124,12 +124,21 @@
         }'
  
@@ -109,17 +124,17 @@ diff -r b756e7a2ec33 make/lib/JvmMapfile.gmk
  else
    $(error Unknown target OS $(OPENJDK_TARGET_OS) in JvmMapfile.gmk)
  endif
-@@ -140,6 +149,7 @@
+@@ -139,6 +148,7 @@
+ # problematic on some platforms.
  $(JVM_OUTPUTDIR)/symbols-objects: $(BUILD_LIBJVM_ALL_OBJS)
  	$(call LogInfo, Generating symbol list from object files)
++	$(call LogInfo, "HELLO: $(NAWK) $(FILTER_SYMBOLS_AWK_SCRIPT)")
  	$(CD) $(JVM_OUTPUTDIR)/objs && \
-+  echo "HELLO: $(NAWK) $(FILTER_SYMBOLS_AWK_SCRIPT)" \
  	  $(DUMP_SYMBOLS_CMD) | $(NAWK) $(FILTER_SYMBOLS_AWK_SCRIPT) | $(SORT) -u > $@
  
- SYMBOLS_SRC += $(JVM_OUTPUTDIR)/symbols-objects
 diff -r b756e7a2ec33 make/lib/Lib-jdk.hotspot.agent.gmk
 --- a/make/lib/Lib-jdk.hotspot.agent.gmk	Thu Aug 03 18:56:57 2017 +0000
-+++ b/make/lib/Lib-jdk.hotspot.agent.gmk	Fri Oct 27 19:28:15 2017 +0200
++++ b/make/lib/Lib-jdk.hotspot.agent.gmk	Sat Dec 16 14:16:28 2017 +0100
 @@ -78,21 +78,26 @@
  
  else ifeq ($(OPENJDK_TARGET_OS), windows)
@@ -169,7 +184,7 @@ diff -r b756e7a2ec33 make/lib/Lib-jdk.hotspot.agent.gmk
  ))
 diff -r b756e7a2ec33 make/test/GtestImage.gmk
 --- a/make/test/GtestImage.gmk	Thu Aug 03 18:56:57 2017 +0000
-+++ b/make/test/GtestImage.gmk	Fri Oct 27 19:28:15 2017 +0200
++++ b/make/test/GtestImage.gmk	Sat Dec 16 14:16:28 2017 +0100
 @@ -37,7 +37,7 @@
    $(eval TARGETS += $$(COPY_GTEST_$v)) \
  )
@@ -179,9 +194,29 @@ diff -r b756e7a2ec33 make/test/GtestImage.gmk
    $(foreach v, $(JVM_VARIANTS), \
      $(eval $(call SetupCopyFiles, COPY_GTEST_MSVCR_$v, \
          DEST := $(TEST_IMAGE_DIR)/hotspot/gtest/$v, \
+diff -r b756e7a2ec33 src/cpu/x86/vm/jni_x86.h
+--- a/src/cpu/x86/vm/jni_x86.h	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/cpu/x86/vm/jni_x86.h	Sat Dec 16 14:16:28 2017 +0100
+@@ -29,7 +29,16 @@
+ #if defined(_WIN32)
+   #define JNIEXPORT __declspec(dllexport)
+   #define JNIIMPORT __declspec(dllimport)
++#if defined(_MSC_VER)
+   #define JNICALL __stdcall
++#elif defined(__MINGW64__)
++  #define JNICALL __stdcall
++#elif defined(__MINGW32__ )
++  //on 32-bit MINGW __stdcall results mangling/decoration of function names
++  // like _JNI_CreateJavaVM@12
++  // therefore __stdcall is not needed
++  #define JNICALL 
++#endif
+ 
+   typedef int jint;
+   typedef __int64 jlong;
 diff -r b756e7a2ec33 src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp
 --- a/src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -48,9 +48,20 @@
  #endif
  
@@ -205,7 +240,7 @@ diff -r b756e7a2ec33 src/jdk.hotspot.agent/windows/native/libsaproc/sawindbg.cpp
  template <class T>
 diff -r b756e7a2ec33 src/os/windows/vm/attachListener_windows.cpp
 --- a/src/os/windows/vm/attachListener_windows.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/os/windows/vm/attachListener_windows.cpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/os/windows/vm/attachListener_windows.cpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -148,13 +148,13 @@
    void set_next(Win32AttachOperation* next)             { _next = next; }
  
@@ -224,16 +259,16 @@ diff -r b756e7a2ec33 src/os/windows/vm/attachListener_windows.cpp
  
 diff -r b756e7a2ec33 src/os/windows/vm/interfaceSupport_windows.hpp
 --- a/src/os/windows/vm/interfaceSupport_windows.hpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/os/windows/vm/interfaceSupport_windows.hpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/os/windows/vm/interfaceSupport_windows.hpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -36,11 +36,15 @@
    // __try/__except are very lightweight operations (only several
    // instructions not affecting control flow directly on x86)
    // so we can use it here, on very time critical path
-+  #if defined(_WIN32) && !defined(__MINGW32__)
++  #if defined(_MSC_VER)
    __try {
 +  #endif
      os::write_memory_serialize_page(thread);
-+  #if defined(_WIN32) && !defined(__MINGW32__)
++    #if defined(_MSC_VER)
    } __except (os::win32::
                serialize_fault_filter((_EXCEPTION_POINTERS*)_exception_info()))
      {}
@@ -243,17 +278,17 @@ diff -r b756e7a2ec33 src/os/windows/vm/interfaceSupport_windows.hpp
  #endif // OS_WINDOWS_VM_INTERFACESUPPORT_WINDOWS_HPP
 diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
 --- a/src/os/windows/vm/os_windows.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/os/windows/vm/os_windows.cpp	Fri Oct 27 19:28:15 2017 +0200
-@@ -124,6 +124,9 @@
-   #endif
- #endif
++++ b/src/os/windows/vm/os_windows.cpp	Sat Dec 16 14:16:28 2017 +0100
+@@ -179,6 +179,9 @@
+ static LPTOP_LEVEL_EXCEPTION_FILTER prev_uef_handler = NULL;
  
+ LONG WINAPI Handle_FLT_Exception(struct _EXCEPTION_POINTERS* exceptionInfo);
 +#if defined(__MINGW32__)
 +LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
 +#endif
- // save DLL module handle, used by GetModuleFileName
  
- HINSTANCE vm_lib_handle;
+ void os::init_system_properties_values() {
+   // sysclasspath, java_home, dll_dir
 @@ -186,7 +189,7 @@
      char *home_path;
      char *dll_path;
@@ -263,16 +298,22 @@ diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
      char home_dir[MAX_PATH + 1];
      char *alt_home_dir = ::getenv("_ALT_JAVA_HOME_DIR");
  
-@@ -298,6 +301,8 @@
+@@ -298,7 +301,13 @@
  #ifndef _WIN64
    // set our UnhandledExceptionFilter and save any previous one
    prev_uef_handler = SetUnhandledExceptionFilter(Handle_FLT_Exception);
-+#elif defined (__MINGW32__)
+-#endif
++#else
++  #if !defined (_MSC_VER)
++  // For gcc builds set up always a top level exception filter
++  // as no SEH will be used
 +  prev_uef_handler = SetUnhandledExceptionFilter(topLevelExceptionFilter);
- #endif
++  #endif // _MSC_VER
++#endif // _WIN64
  
    // Done
-@@ -415,7 +420,7 @@
+   return;
+@@ -415,7 +424,7 @@
  LONG WINAPI topLevelExceptionFilter(struct _EXCEPTION_POINTERS* exceptionInfo);
  
  // Thread start routine for all newly created threads
@@ -281,39 +322,39 @@ diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
    // Try to randomize the cache line index of hot stack frames.
    // This helps when threads of the same stack traces evict each other's
    // cache lines. The threads can be either from the same JVM instance, or
-@@ -448,12 +453,17 @@
+@@ -448,12 +457,17 @@
    // Install a win32 structured exception handler around every thread created
    // by VM, so VM can generate error dump when an exception occurred in non-
    // Java thread (e.g. VM thread).
-+  #if !defined(__MINGW32__)
++  #if defined(_MSC_VER)
    __try {
-+  #endif
++  #endif // _MSC_VER
      thread->run();
-+  #if !defined(__MINGW32__)
++  #if defined(_MSC_VER)
    } __except(topLevelExceptionFilter(
                                       (_EXCEPTION_POINTERS*)_exception_info())) {
      // Nothing to do.
    }
-+  #endif
++  #endif // _MSC_VER
 +  
  
    log_info(os, thread)("Thread finished (tid: " UINTX_FORMAT ").", os::current_thread_id());
  
-@@ -796,9 +806,13 @@
+@@ -796,9 +810,13 @@
    info.dwThreadID = -1;
    info.dwFlags = 0;
  
-+#if !defined (__MINGW32__)
++#if defined(_MSC_VER)
    __try {
-+#endif //__MINGW32__
++#endif //_MSC_VER
      RaiseException (MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(DWORD), (const ULONG_PTR*)&info );
-+#if !defined (__MINGW32__)
++#if defined(_MSC_VER)
    } __except(EXCEPTION_EXECUTE_HANDLER) {}
-+#endif //__MINGW32__  
++#endif //_MSC_VER  
  }
  
  bool os::distribute_processes(uint length, uint* distribution) {
-@@ -2235,7 +2249,7 @@
+@@ -2235,7 +2253,7 @@
  
  #define def_excpt(val) { #val, (val) }
  
@@ -322,25 +363,57 @@ diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
      def_excpt(EXCEPTION_ACCESS_VIOLATION),
      def_excpt(EXCEPTION_DATATYPE_MISALIGNMENT),
      def_excpt(EXCEPTION_BREAKPOINT),
-@@ -2770,13 +2784,17 @@
+@@ -2766,6 +2784,7 @@
+   return EXCEPTION_CONTINUE_SEARCH;
+ }
+ 
++#if defined(_MSC_VER)
+ #define DEFINE_FAST_GETFIELD(Return, Fieldname, Result)                     \
    Return JNICALL jni_fast_Get##Result##Field_wrapper(JNIEnv *env,           \
                                                       jobject obj,           \
-                                                      jfieldID fieldID) {    \
-+#if defined(_WIN32) && !defined(__MINGW32__)
-     __try {                                                                 \
-+#endif
-       return (*JNI_FastGetField::jni_fast_Get##Result##Field_fp)(env,       \
-                                                                  obj,       \
-                                                                  fieldID);  \
-+#if defined(_WIN32) && !defined(__MINGW32__)                                                                 
-     } __except(fastJNIAccessorExceptionFilter((_EXCEPTION_POINTERS*)        \
-                                               _exception_info())) {         \
+@@ -2779,6 +2798,17 @@
      }                                                                       \
-+#endif
      return 0;                                                               \
    }
++#else
++#define DEFINE_FAST_GETFIELD(Return, Fieldname, Result)                   \
++Return JNICALL jni_fast_Get##Result##Field_wrapper(JNIEnv *env,           \
++                                                   jobject obj,           \
++                                                   jfieldID fieldID) {    \
++  return (*JNI_FastGetField::jni_fast_Get##Result##Field_fp)(env,         \
++                                                            obj,          \
++                                                            fieldID);     \
++  return 0;                                                               \
++  }
++#endif
  
-@@ -4679,8 +4697,12 @@
+ DEFINE_FAST_GETFIELD(jboolean, bool,   Boolean)
+ DEFINE_FAST_GETFIELD(jbyte,    byte,   Byte)
+@@ -4194,6 +4224,7 @@
+   // for debugging float code generation bugs
+   if (ForceFloatExceptions) {
+ #ifndef  _WIN64
++#if defined(_MSC_VER)
+     static long fp_control_word = 0;
+     __asm { fstcw fp_control_word }
+     // see Intel PPro Manual, Vol. 2, p 7-16
+@@ -4205,6 +4236,15 @@
+     const long invalid   = 0x01;
+     fp_control_word |= invalid;
+     __asm { fldcw fp_control_word }
++#else
++  //FIXME: Need gcc version of asm here
++    __asm__ volatile (
++          "fldcw %0\n\t"
++          :
++          : "r" (fp_control_word)
++          :
++      );
++#endif
+ #endif
+   }
+ 
+@@ -4679,8 +4719,12 @@
  static int nonSeekAvailable(int, long *);
  static int stdinAvailable(int, long *);
  
@@ -353,25 +426,25 @@ diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
  
  // This code is a copy of JDK's sysAvailable
  // from src/windows/hpi/src/sys_api_md.c
-@@ -4999,13 +5021,17 @@
+@@ -4999,13 +5043,17 @@
           "crash_protection already set?");
  
    bool success = true;
-+  #if !defined(__MINGW32__)
++  #if defined(_MSC_VER)
    __try {
-+  #endif
++  #endif // _MSC_VER
      WatcherThread::watcher_thread()->set_crash_protection(this);
      cb.call();
-+  #if !defined(__MINGW32__)
++  #if defined(_MSC_VER)
    } __except(EXCEPTION_EXECUTE_HANDLER) {
      // only for protection, nothing to do
      success = false;
    }
-+  #endif
++  #endif // _MSC_VER
    WatcherThread::watcher_thread()->set_crash_protection(NULL);
    return success;
  }
-@@ -5605,7 +5631,7 @@
+@@ -5605,7 +5653,7 @@
  */
  int os::get_signal_number(const char* name) {
    static const struct {
@@ -380,34 +453,526 @@ diff -r b756e7a2ec33 src/os/windows/vm/os_windows.cpp
      int   number;
    } siglabels [] =
      // derived from version 6.0 VC98/include/signal.h
+diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/atomic_windows_x86.hpp
+--- a/src/os_cpu/windows_x86/vm/atomic_windows_x86.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os_cpu/windows_x86/vm/atomic_windows_x86.hpp	Sat Dec 16 14:16:28 2017 +0100
+@@ -61,10 +61,14 @@
+ // VC++ doesn't like the lock prefix to be on a single line
+ // so we can't insert a label after the lock prefix.
+ // By emitting a lock prefix, we can define a label after it.
++#if defined (_MSC_VER)
+ #define LOCK_IF_MP(mp) __asm cmp mp, 0  \
+                        __asm je L0      \
+                        __asm _emit 0xF0 \
+                        __asm L0:
++#else
++#define LOCK_IF_MP(mp) "cmp $0, " #mp "; je 1f; lock; 1: "
++#endif
+ 
+ #ifdef AMD64
+ inline void Atomic::store    (jlong    store_value, jlong*    dest) { *dest = store_value; }
+@@ -145,6 +149,7 @@
+ 
+ inline jint     Atomic::add    (jint     add_value, volatile jint*     dest) {
+   int mp = os::is_MP();
++#if defined(_MSC_VER)
+   __asm {
+     mov edx, dest;
+     mov eax, add_value;
+@@ -152,8 +157,16 @@
+     LOCK_IF_MP(mp)
+     xadd dword ptr [edx], eax;
+     add eax, ecx;
++    }
++#else
++  jint addend = add_value;
++  __asm__ volatile (  LOCK_IF_MP(%3) "xaddl %0,(%2)"
++  : "=r" (addend)
++  : "0" (addend), "r" (dest), "r" (mp)
++  : "cc", "memory");
++  return addend + add_value;
++#endif
+   }
+-}
+ 
+ inline intptr_t Atomic::add_ptr(intptr_t add_value, volatile intptr_t* dest) {
+   return (intptr_t)add((jint)add_value, (volatile jint*)dest);
+@@ -166,11 +179,16 @@
+ inline void Atomic::inc    (volatile jint*     dest) {
+   // alternative for InterlockedIncrement
+   int mp = os::is_MP();
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, dest;
+     LOCK_IF_MP(mp)
+     add dword ptr [edx], 1;
+   }
++  #else
++  __asm__ volatile (LOCK_IF_MP(%1) "addl $1,(%0)" :
++  : "r" (dest), "r" (mp) : "cc", "memory");
++  #endif
+ }
+ 
+ inline void Atomic::inc_ptr(volatile intptr_t* dest) {
+@@ -184,11 +202,16 @@
+ inline void Atomic::dec    (volatile jint*     dest) {
+   // alternative for InterlockedDecrement
+   int mp = os::is_MP();
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, dest;
+     LOCK_IF_MP(mp)
+     sub dword ptr [edx], 1;
+   }
++  #else
++  __asm__ volatile (LOCK_IF_MP(%1) "subl $1,(%0)" :
++  : "r" (dest), "r" (mp) : "cc", "memory");
++  #endif
+ }
+ 
+ inline void Atomic::dec_ptr(volatile intptr_t* dest) {
+@@ -201,11 +224,19 @@
+ 
+ inline jint     Atomic::xchg    (jint     exchange_value, volatile jint*     dest) {
+   // alternative for InterlockedExchange
++  #if defined(_MSC_VER)
+   __asm {
+     mov eax, exchange_value;
+     mov ecx, dest;
+     xchg eax, dword ptr [ecx];
+   }
++  #else
++  __asm__ volatile (  "xchgl (%2),%0"
++                    : "=r" (exchange_value)
++                    : "0" (exchange_value), "r" (dest)
++                    : "memory");
++  return exchange_value;
++  #endif
+ }
+ 
+ inline intptr_t Atomic::xchg_ptr(intptr_t exchange_value, volatile intptr_t* dest) {
+@@ -220,6 +251,7 @@
+ inline jbyte    Atomic::cmpxchg    (jbyte    exchange_value, volatile jbyte*    dest, jbyte    compare_value, cmpxchg_memory_order order) {
+   // alternative for InterlockedCompareExchange
+   int mp = os::is_MP();
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, dest
+     mov cl, exchange_value
+@@ -227,11 +259,19 @@
+     LOCK_IF_MP(mp)
+     cmpxchg byte ptr [edx], cl
+   }
++  #else
++  __asm__ volatile (LOCK_IF_MP(%4) "cmpxchgb %1,(%3)"
++                    : "=a" (exchange_value)
++                    : "q" (exchange_value), "a" (compare_value), "r" (dest), "r" (mp)
++                    : "cc", "memory");
++  return exchange_value;
++  #endif
+ }
+ 
+ inline jint     Atomic::cmpxchg    (jint     exchange_value, volatile jint*     dest, jint     compare_value, cmpxchg_memory_order order) {
+   // alternative for InterlockedCompareExchange
+   int mp = os::is_MP();
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, dest
+     mov ecx, exchange_value
+@@ -239,14 +279,23 @@
+     LOCK_IF_MP(mp)
+     cmpxchg dword ptr [edx], ecx
+   }
++  #else
++  __asm__ volatile (LOCK_IF_MP(%4) "cmpxchgl %1,(%3)"
++                    : "=a" (exchange_value)
++                    : "r" (exchange_value), "a" (compare_value), "r" (dest), "r" (mp)
++                    : "cc", "memory");
++  return exchange_value;
++  #endif
+ }
+ 
+ inline jlong    Atomic::cmpxchg    (jlong    exchange_value, volatile jlong*    dest, jlong    compare_value, cmpxchg_memory_order order) {
+   int mp = os::is_MP();
++  
+   jint ex_lo  = (jint)exchange_value;
+   jint ex_hi  = *( ((jint*)&exchange_value) + 1 );
+   jint cmp_lo = (jint)compare_value;
+   jint cmp_hi = *( ((jint*)&compare_value) + 1 );
++  #if defined(_MSC_VER)
+   __asm {
+     push ebx
+     push edi
+@@ -260,6 +309,31 @@
+     pop edi
+     pop ebx
+   }
++  #else
++  //FIXME:
++  long previous;
++  __asm__ volatile(LOCK_IF_MP(%5)
++                "cmpxchg8b %1"
++                : "=A"(previous), "+m"(dest)
++                : "b"((uint32_t) exchange_value), "c"((uint32_t)(exchange_value >> 32)), "0"(compare_value), "r" (mp));
++  /*
++  __asm__ volatile (  "push    %%ebx;"
++                      "push    %%edi;"
++                      "mov     %3, %%eax;"
++                      "mov     %4, %%edx;"
++                      "mov     %5, %%edi;"
++                      "mov     %1, %%ebx;"
++                      "mov     %2, %%ecx;"
++                      LOCK_IF_MP(%6)
++                      "cmpxchg8b (%%edi);"
++                      "pop     %%edi;"
++                      "pop     %%ebx;"
++                      : "=r" (exchange_value)
++                      : "a" (ex_lo), "a" (ex_hi), "r" (cmp_lo), "a" (cmp_hi), "r" (dest), "r" (mp)
++                      : "cc", "memory");
++  */  
++  return previous;
++  #endif
+ }
+ 
+ inline intptr_t Atomic::cmpxchg_ptr(intptr_t exchange_value, volatile intptr_t* dest, intptr_t compare_value, cmpxchg_memory_order order) {
+@@ -273,23 +347,45 @@
+ inline jlong Atomic::load(volatile jlong* src) {
+   volatile jlong dest;
+   volatile jlong* pdest = &dest;
++  #if defined(_MSC_VER)
+   __asm {
+     mov eax, src
+     fild     qword ptr [eax]
+     mov eax, pdest
+     fistp    qword ptr [eax]
+   }
++  #else
++  __asm__ volatile ("movl     %1, %%eax \n\t"
++                    "fildll   (%%eax) \n\t"
++                    "movl     %0, %%eax \n\t"
++                    "fistpll  (%%eax) \n\t"
++        : "=r" (pdest)
++        : "r" (src)
++        : "eax"
++  );
++  #endif
+   return dest;
+ }
+ 
+ inline void Atomic::store(jlong store_value, volatile jlong* dest) {
+   volatile jlong* src = &store_value;
++  #if defined(_MSC_VER)
+   __asm {
+     mov eax, src
+     fild     qword ptr [eax]
+     mov eax, dest
+     fistp    qword ptr [eax]
+   }
++  #else
++  __asm__ volatile ("movl     4(%1), %%eax \n"
++                    "fildll    (%%eax) \n"
++                    "movl     8(%0), %%eax \n"
++                    "fistpll   (%%eax) \n"
++                  : "=r" (dest)
++                  : "r" (src)
++                  : "eax"
++  );
++  #endif
+ }
+ 
+ inline void Atomic::store(jlong store_value, jlong* dest) {
+diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/bytes_windows_x86.inline.hpp
+--- a/src/os_cpu/windows_x86/vm/bytes_windows_x86.inline.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os_cpu/windows_x86/vm/bytes_windows_x86.inline.hpp	Sat Dec 16 14:16:28 2017 +0100
+@@ -34,10 +34,23 @@
+   address p = (address) &x;
+   return  ( (u2(p[0]) << 8 ) | ( u2(p[1])) );
+ #else
++#if defined(_MSC_VER)
+   __asm {
+     mov ax, x
+     xchg al, ah
+   }
++#else
++  u2 ret;
++  __asm__ __volatile__ (
++    "movw %0, %%ax;"
++    "xchg %%al, %%ah;"
++    "movw %%ax, %0"
++    :"=r" (ret)      // output : register 0 => ret
++    :"0"  (x)        // input  : x => register 0
++    :"ax", "0"       // clobbered registers
++  );
++  return ret;
++#endif
+   // no return statement needed, result is already in ax
+   // compiler warning C4035 disabled via warning pragma
+ #endif // AMD64
+@@ -48,12 +61,23 @@
+   address p = (address) &x;
+   return ( (u4(p[0]) << 24) | (u4(p[1]) << 16) | (u4(p[2]) << 8) | u4(p[3])) ;
+ #else
+-  __asm {
++#if defined(_MSC_VER)
++__asm {
+     mov eax, x
+     bswap eax
+   }
+   // no return statement needed, result is already in eax
+   // compiler warning C4035 disabled via warning pragma
++#else
++  u4 ret;
++  __asm__ __volatile__ (
++    "bswap %0"
++    :"=r" (ret)      // output : register 0 => ret
++    :"0"  (x)        // input  : x => register 0
++    :"0"             // clobbered register
++  );
++  return ret;
++#endif
+ #endif // AMD64
+ }
+ 
+@@ -67,6 +91,7 @@
+ #else
+ // Helper function for swap_u8
+ inline u8 Bytes::swap_u8_base(u4 x, u4 y) {
++#if defined(_MSC_VER)
+   __asm {
+     mov eax, y
+     mov edx, x
+@@ -75,6 +100,9 @@
+   }
+   // no return statement needed, result is already in edx:eax
+   // compiler warning C4035 disabled via warning pragma
++#else
++  return (((u8)swap_u4(x))<<32) | swap_u4(y);
++#endif
+ }
+ 
+ inline u8 Bytes::swap_u8(u8 x) {
+diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/copy_windows_x86.inline.hpp
+--- a/src/os_cpu/windows_x86/vm/copy_windows_x86.inline.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os_cpu/windows_x86/vm/copy_windows_x86.inline.hpp	Sat Dec 16 14:16:28 2017 +0100
+@@ -122,6 +122,7 @@
+   pd_conjoint_oops_atomic((oop*)from, (oop*)to, count);
+ #else
+   // Guarantee use of fild/fistp or xmm regs via some asm code, because compilers won't.
++#if defined(_MSC_VER)
+   __asm {
+     mov    eax, from;
+     mov    edx, to;
+@@ -146,6 +147,25 @@
+     jge    down;
+   done:;
+   }
++#else
++  if (from > to) {
++    while (count-- > 0) {
++      __asm__ volatile("fildll (%0); fistpll (%1)"
++                       :
++                       : "r" (from), "r" (to)
++                       : "memory" );
++      ++from;
++      ++to;
++    }
++  } else {
++    while (count-- > 0) {
++      __asm__ volatile("fildll (%0,%2,8); fistpll (%1,%2,8)"
++                       :
++                       : "r" (from), "r" (to), "r" (count)
++                       : "memory" );
++    }
++  }
++#endif // _MSC_VER
+ #endif // AMD64
+ }
+ 
+diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/orderAccess_windows_x86.inline.hpp
+--- a/src/os_cpu/windows_x86/vm/orderAccess_windows_x86.inline.hpp	Thu Aug 03 18:56:57 2017 +0000
++++ b/src/os_cpu/windows_x86/vm/orderAccess_windows_x86.inline.hpp	Sat Dec 16 14:16:28 2017 +0100
+@@ -64,9 +64,13 @@
+   StubRoutines_fence();
+ #else
+   if (os::is_MP()) {
++    #if defined(_MSC_VER)
+     __asm {
+       lock add dword ptr [esp], 0;
+     }
++    #else
++    __asm__ volatile ("lock; addl $0,0(%%esp)" : : : "cc", "memory");
++    #endif // _MSC_VER
+   }
+ #endif // AMD64
+   compiler_barrier();
+@@ -75,29 +79,50 @@
+ #ifndef AMD64
+ template<>
+ inline void OrderAccess::specialized_release_store_fence<jbyte> (volatile jbyte*  p, jbyte  v) {
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, p;
+     mov al, v;
+     xchg al, byte ptr [edx];
+   }
++  #else
++  __asm__ volatile (  "xchgb (%2),%0"
++                      : "=q" (v)
++                      : "0" (v), "r" (p)
++                      : "memory");
++  #endif
+ }
+ 
+ template<>
+ inline void OrderAccess::specialized_release_store_fence<jshort>(volatile jshort* p, jshort v) {
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, p;
+     mov ax, v;
+     xchg ax, word ptr [edx];
+   }
++  #else
++  __asm__ volatile (  "xchgw (%2),%0"
++                      : "=r" (v)
++                      : "0" (v), "r" (p)
++                      : "memory");
++  #endif // _MSC_VER
+ }
+ 
+ template<>
+ inline void OrderAccess::specialized_release_store_fence<jint>  (volatile jint*   p, jint   v) {
++  #if defined(_MSC_VER)
+   __asm {
+     mov edx, p;
+     mov eax, v;
+     xchg eax, dword ptr [edx];
+   }
++  #else
++  __asm__ volatile (  "xchgl (%2),%0"
++                      : "=r" (v)
++                      : "0" (v), "r" (p)
++                      : "memory");
++  #endif // _MSC_VER
+ }
+ #endif // AMD64
+ 
 diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/os_windows_x86.cpp
 --- a/src/os_cpu/windows_x86/vm/os_windows_x86.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/os_cpu/windows_x86/vm/os_windows_x86.cpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/os_cpu/windows_x86/vm/os_windows_x86.cpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -72,7 +72,9 @@
  
  // Install a win32 structured exception handler around thread.
  void os::os_exception_wrapper(java_call_t f, JavaValue* value, const methodHandle& method, JavaCallArguments* args, Thread* thread) {
-+#if defined(_WIN32) && !defined(__MINGW32__)
++#if defined(_MSC_VER)
    __try {
-+#endif
++#endif // _MSC_VER
  
  #ifndef AMD64
      // We store the current thread in this wrapperthread location
-@@ -112,9 +114,11 @@
+@@ -87,11 +89,23 @@
+ 
+     if (os::win32::get_thread_ptr_offset() == 0) {
+       int thread_ptr_offset;
++#if defined(_MSC_VER)
+       __asm {
+         lea eax, dword ptr wrapperthread;
+         sub eax, dword ptr FS:[0H];
+         mov thread_ptr_offset, eax
+       };
++#else
++    //FIXME: need an assembler here
++    __asm__ volatile(
++      "leal %1, %%eax \n\t"
++      "subl %%fs:0, %%eax \n\t"
++      "movl %%eax, %0 \n\t"
++      : "=r" (thread_ptr_offset)
++      : "r" (wrapperthread)
++      : "memory"
++    );
++#endif // _MSC_VER
+       os::win32::set_thread_ptr_offset(thread_ptr_offset);
+     }
+ #ifdef ASSERT
+@@ -100,11 +114,23 @@
+     // inlined version of this routine.
+     else {
+       int test_thread_ptr_offset;
++      #if defined(_MSC_VER)
+       __asm {
+         lea eax, dword ptr wrapperthread;
+         sub eax, dword ptr FS:[0H];
+         mov test_thread_ptr_offset, eax
+       };
++      #else
++      //FIXME: need an assembler here
++      __asm__ volatile(
++        "leal %1, %%eax \n\t"
++        "subl %%fs:0, %%eax \n\t"
++        "movl %%eax, %0 \n\t"
++        : "=r" (thread_ptr_offset)
++        : "r" (wrapperthread)
++        : "memory"
++      );
++      #endif      
+       assert(test_thread_ptr_offset == os::win32::get_thread_ptr_offset(),
+              "thread pointer offset from SEH changed");
+     }
+@@ -112,9 +138,11 @@
  #endif // !AMD64
  
      f(value, method, args, thread);
-+#if defined(_WIN32) && !defined(__MINGW32__)
++#if defined(_MSC_VER)
    } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
        // Nothing to do.
    }
-+#endif
++#endif // _MSC_VER
  }
  
  #ifdef AMD64
+@@ -493,9 +521,13 @@
+ #ifndef AMD64
+ intptr_t* _get_previous_fp() {
+   intptr_t **frameptr;
++#if defined(_MSC_VER)
+   __asm {
+     mov frameptr, ebp
+   };
++#else
++  __asm__("mov %%ebp, %0":"=r"(frameptr));
++#endif // _MSC_VER
+   // ebp (frameptr) is for this frame (_get_previous_fp). We want the ebp for the
+   // caller of os::current_frame*(), so go up two frames. However, for
+   // optimized builds, _get_previous_fp() will be inlined, so only go
+@@ -646,9 +678,13 @@
+    // pause == rep:nop
+    // On systems that don't support pause a rep:nop
+    // is executed as a nop.  The rep: prefix is ignored.
++#if defined(_MSC_VER)
+    _asm {
+       pause ;
+    };
++#else
++__asm__ volatile (  "pause" : : : "memory");
++#endif // _MSC_VER
+    return 1 ;
+ #endif // AMD64
+ }
+@@ -657,7 +693,12 @@
+ void os::setup_fpu() {
+ #ifndef AMD64
+   int fpu_cntrl_word = StubRoutines::fpu_cntrl_wrd_std();
++#if defined(_MSC_VER)
+   __asm fldcw fpu_cntrl_word;
++#else
++__asm__ volatile (  "fldcw (%0)" :
++                    : "r" (fpu_cntrl_word) : "memory");
++#endif // _MSC_VER
+ #endif // !AMD64
+ }
+ 
 diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp
 --- a/src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -29,7 +29,7 @@
  #ifdef AMD64
  typedef unsigned char UBYTE;
@@ -437,7 +1002,7 @@ diff -r b756e7a2ec33 src/os_cpu/windows_x86/vm/unwind_windows_x86.hpp
  typedef EXCEPTION_DISPOSITION (*PEXCEPTION_ROUTINE) (
 diff -r b756e7a2ec33 src/share/vm/compiler/methodMatcher.cpp
 --- a/src/share/vm/compiler/methodMatcher.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/share/vm/compiler/methodMatcher.cpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/share/vm/compiler/methodMatcher.cpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -96,7 +96,7 @@
    bool have_colon = (colon != NULL);
    if (have_colon) {
@@ -449,24 +1014,24 @@ diff -r b756e7a2ec33 src/share/vm/compiler/methodMatcher.cpp
          return false;
 diff -r b756e7a2ec33 src/share/vm/prims/jni.cpp
 --- a/src/share/vm/prims/jni.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/share/vm/prims/jni.cpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/share/vm/prims/jni.cpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -4026,11 +4026,11 @@
  _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_CreateJavaVM(JavaVM **vm, void **penv, void *args) {
    jint result = 0;
    // On Windows, let CreateJavaVM run with SEH protection
 -#ifdef _WIN32
-+#if defined(_WIN32) && !defined(__MINGW32__)
++#if defined(_WIN32) && defined(_MSC_VER)
    __try {
  #endif
      result = JNI_CreateJavaVM_inner(vm, penv, args);
 -#ifdef _WIN32
-+#if defined(_WIN32) && !defined(__MINGW32__)
++#if defined(_WIN32) && defined(_MSC_VER)
    } __except(topLevelExceptionFilter((_EXCEPTION_POINTERS*)_exception_info())) {
      // Nothing to do.
    }
 diff -r b756e7a2ec33 src/share/vm/utilities/globalDefinitions_gcc.hpp
 --- a/src/share/vm/utilities/globalDefinitions_gcc.hpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/src/share/vm/utilities/globalDefinitions_gcc.hpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/src/share/vm/utilities/globalDefinitions_gcc.hpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -84,6 +84,12 @@
  #include <sys/time.h>
  #endif // LINUX || _ALLBSD_SOURCE
@@ -564,7 +1129,7 @@ diff -r b756e7a2ec33 src/share/vm/utilities/globalDefinitions_gcc.hpp
  #endif
 diff -r b756e7a2ec33 test/native/gtestMain.cpp
 --- a/test/native/gtestMain.cpp	Thu Aug 03 18:56:57 2017 +0000
-+++ b/test/native/gtestMain.cpp	Fri Oct 27 19:28:15 2017 +0200
++++ b/test/native/gtestMain.cpp	Sat Dec 16 14:16:28 2017 +0100
 @@ -191,7 +191,7 @@
  #endif // __APPLE__
  
@@ -576,7 +1141,7 @@ diff -r b756e7a2ec33 test/native/gtestMain.cpp
    sprintf_s(envString, len, "%s=%s", java_home_var, java_home);
 diff -r b756e7a2ec33 test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c
 --- a/test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c	Thu Aug 03 18:56:57 2017 +0000
-+++ b/test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c	Fri Oct 27 19:28:15 2017 +0200
++++ b/test/runtime/jni/CalleeSavedRegisters/exeFPRegs.c	Sat Dec 16 14:16:28 2017 +0100
 @@ -21,6 +21,7 @@
   * questions.
   *
