@@ -10,11 +10,12 @@ _hg_tag="jdk-$_majorver+$_updatever"
 _repo_ver=jdk$_java_ver.$_hg_tag
 pkgrel=1
 _pkg_full_ver=$pkgver-$pkgrel
-arch=('any')
+arch=('x86_64')
 url='http://openjdk.java.net/'
 license=('custom')
 makedepends=(zip
           unzip
+          "${MINGW_PACKAGE_PREFIX}-dlfcn"
           "${MINGW_PACKAGE_PREFIX}-freetype"
           "${MINGW_PACKAGE_PREFIX}-libjpeg-turbo"
           "${MINGW_PACKAGE_PREFIX}-libpng"
@@ -43,7 +44,7 @@ md5sums=('aa108a8322b1dadf1bae7e788b2f2224'
          '4e7e7b3deb3f470525025da1a497e134'
          '9e503aa3835f1ce841bf7601d0605f9a'
          '3868af06c7f1dfd6f1399e8dad974b81'
-         '073a9bfa94eae28e016f14f3b6183ca1'
+         '3bede57816bce34550ae71a535ae81ff'
          '04e953ff7f84299db24dce1fb7e5201e'
          '5713db088eff834ab5223350bc3e39a8')
 
@@ -133,6 +134,7 @@ build() {
 package_mingw-w64-x86_64-jre9-openjdk-headless() {
   pkgdesc="OpenJDK Java $_majorver headless runtime environment"
   depends=(
+          "${MINGW_PACKAGE_PREFIX}-dlfcn"
           "${MINGW_PACKAGE_PREFIX}-freetype"
           "${MINGW_PACKAGE_PREFIX}-libjpeg-turbo"
           "${MINGW_PACKAGE_PREFIX}-libpng"

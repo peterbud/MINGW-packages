@@ -1,6 +1,6 @@
 diff -r a08cbfc0e4ec .hgignore
 --- a/.hgignore	Thu Aug 03 18:56:56 2017 +0000
-+++ b/.hgignore	Wed Nov 01 08:51:31 2017 +0100
++++ b/.hgignore	Sat Dec 16 14:03:22 2017 +0100
 @@ -8,3 +8,4 @@
  .DS_Store
  .metadata/
@@ -8,7 +8,7 @@ diff -r a08cbfc0e4ec .hgignore
 +^.vscode/
 diff -r a08cbfc0e4ec common/autoconf/basics.m4
 --- a/common/autoconf/basics.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/basics.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/basics.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -1228,6 +1228,11 @@
    AC_MSG_CHECKING([if bash supports errexit (-e)])
    if ${BASH} -e -c 'true'; then
@@ -23,7 +23,7 @@ diff -r a08cbfc0e4ec common/autoconf/basics.m4
      AC_MSG_RESULT([no])
 diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
 --- a/common/autoconf/basics_windows.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/basics_windows.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/basics_windows.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -42,7 +42,7 @@
      windows_path=`$CYGPATH -m "$unix_path"`
      $1="$windows_path"
@@ -86,15 +86,24 @@ diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
    fi
  ])
  
-@@ -380,6 +394,7 @@
+@@ -380,8 +394,16 @@
    # @files and rewrites these too! This wrapper binary is
    # called fixpath.
    FIXPATH=
 +  FIXPATHJ=
    if test "x$OPENJDK_BUILD_OS" = xwindows; then
      AC_MSG_CHECKING([if fixpath can be created])
++    
++    if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
++      # Prohibit msys2 path conversion from trying to be "intelligent", and rely
++      # on fixpath instead. We need this already to compile fixpath itself
++      export MSYS2_ARG_CONV_EXCL="*"
++    fi
++
      FIXPATH_SRC="$SRC_ROOT/common/src/fixpath.c"
-@@ -391,10 +406,14 @@
+     FIXPATH_BIN="$CONFIGURESUPPORT_OUTPUTDIR/bin/fixpath.exe"
+     FIXPATH_DIR="$CONFIGURESUPPORT_OUTPUTDIR/fixpath"
+@@ -391,10 +413,14 @@
      elif test "x$OPENJDK_BUILD_OS_ENV" = xwindows.msys; then
        # Take all collected prefixes and turn them into a -m/c/foo@/c/bar@... command line
        # @ was chosen as separator to minimize risk of other tools messing around with it
@@ -113,7 +122,7 @@ diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
      fi
      FIXPATH_SRC_W="$FIXPATH_SRC"
      FIXPATH_BIN_W="$FIXPATH_BIN"
-@@ -403,7 +422,7 @@
+@@ -403,7 +429,7 @@
      $RM -rf $FIXPATH_BIN $FIXPATH_DIR
      $MKDIR -p $FIXPATH_DIR $CONFIGURESUPPORT_OUTPUTDIR/bin
      cd $FIXPATH_DIR
@@ -122,7 +131,7 @@ diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
      cd $CURDIR
  
      if test ! -x $FIXPATH_BIN; then
-@@ -414,7 +433,7 @@
+@@ -414,7 +440,7 @@
      AC_MSG_RESULT([yes])
      AC_MSG_CHECKING([if fixpath.exe works])
      cd $FIXPATH_DIR
@@ -131,20 +140,18 @@ diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
          > $FIXPATH_DIR/fixpath2.log 2>&1
      cd $CURDIR
      if test ! -x $FIXPATH_DIR/fixpath2.exe; then
-@@ -424,9 +443,23 @@
+@@ -424,9 +450,21 @@
      fi
      AC_MSG_RESULT([yes])
  
 -    FIXPATH_DETACH_FLAG="--detach"
 +    if test "x$TOOLCHAIN_TYPE" = xmicrosoft; then
-+      # Prohibit msys2 path conversion from trying to be "intelligent", and rely
-+      # on fixpath instead.
-+      export MSYS2_ARG_CONV_EXCL="*"
 +      FIXPATH_DETACH_FLAG="--detach"
++      FIXPATHJ=$FIXPATH
 +    elif test "x$TOOLCHAIN_TYPE" = xgcc; then
 +      # for gcc toolchain we don't need FIXPATH for the compiler tasks
-+      # only for the JAVA bootJDK tasks.
-+      # For JAVA boot JDK tasks disable the automatic argument conversions
++      # only for the JAVA BootJDK tasks.
++      # For JAVA Boot JDK tasks disable the automatic argument conversions
 +      # and rely solely on FIXPATH
 +      FIXPATH_DETACH_FLAG=
 +      FIXPATHJ=`echo -e MSYS2_ARG_CONV_EXCL=* $FIXPATH`
@@ -158,7 +165,7 @@ diff -r a08cbfc0e4ec common/autoconf/basics_windows.m4
  ])
 diff -r a08cbfc0e4ec common/autoconf/build-aux/config.sub
 --- a/common/autoconf/build-aux/config.sub	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/build-aux/config.sub	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/build-aux/config.sub	Sat Dec 16 14:03:22 2017 +0100
 @@ -30,7 +30,7 @@
  DIR=`dirname $0`
  
@@ -181,7 +188,7 @@ diff -r a08cbfc0e4ec common/autoconf/build-aux/config.sub
              shift; break ;;
 diff -r a08cbfc0e4ec common/autoconf/build-performance.m4
 --- a/common/autoconf/build-performance.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/build-performance.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/build-performance.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -247,8 +247,16 @@
        fi
      fi
@@ -203,7 +210,7 @@ diff -r a08cbfc0e4ec common/autoconf/build-performance.m4
        mkdir -p $CCACHE_DIR > /dev/null 2>&1
 diff -r a08cbfc0e4ec common/autoconf/flags.m4
 --- a/common/autoconf/flags.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/flags.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/flags.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -250,7 +250,9 @@
      ARFLAGS="-X64"
    elif test "x$OPENJDK_TARGET_OS" = xwindows; then
@@ -322,7 +329,7 @@ diff -r a08cbfc0e4ec common/autoconf/flags.m4
      TOOLCHAIN_CHECK_COMPILER_VERSION(VERSION: 6, PREFIX: $2, IF_AT_LEAST: FLAGS_SETUP_GCC6_COMPILER_FLAGS($2))
    elif test "x$TOOLCHAIN_TYPE" = xclang; then
      $2JVM_CFLAGS="[$]$2JVM_CFLAGS -D_GNU_SOURCE"
-@@ -1008,7 +1050,9 @@
+@@ -1008,11 +1050,13 @@
      $2COMMON_CCXXFLAGS_JDK="[$]$2COMMON_CCXXFLAGS_JDK -D_ALLBSD_SOURCE"
    elif test "x$OPENJDK_$1_OS" = xwindows; then
      $2JVM_CFLAGS="[$]$2JVM_CFLAGS -D_WINDOWS -DWIN32 -D_JNI_IMPLEMENTATION_"
@@ -333,6 +340,11 @@ diff -r a08cbfc0e4ec common/autoconf/flags.m4
    fi
  
    # Set some additional per-CPU defines.
+-  if test "x$OPENJDK_$1_OS-$OPENJDK_$1_CPU" = xwindows-x86; then
++  if test "x$OPENJDK_$1_OS-$OPENJDK_$1_CPU-x$TOOLCHAIN_TYPE" = xwindows-x86-microsoft; then
+     $2JVM_CFLAGS="[$]$2JVM_CFLAGS -arch:IA32"
+   elif test "x$OPENJDK_$1_CPU" = xsparcv9; then
+     $2JVM_CFLAGS="[$]$2JVM_CFLAGS -xarch=sparc"
 @@ -1296,10 +1340,14 @@
    elif test "x$OPENJDK_$1_OS" = xbsd; then
      $2JVM_LIBS="[$]$2JVM_LIBS -lm"
@@ -353,7 +365,7 @@ diff -r a08cbfc0e4ec common/autoconf/flags.m4
    if test "x$OPENJDK_$1_OS" = xlinux; then
 diff -r a08cbfc0e4ec common/autoconf/jdk-options.m4
 --- a/common/autoconf/jdk-options.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/jdk-options.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/jdk-options.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -324,7 +324,7 @@
      ZIP_EXTERNAL_DEBUG_SYMBOLS=false
    elif test "x$NATIVE_DEBUG_SYMBOLS" = xexternal; then
@@ -365,7 +377,7 @@ diff -r a08cbfc0e4ec common/autoconf/jdk-options.m4
          # this is an error
 diff -r a08cbfc0e4ec common/autoconf/lib-std.m4
 --- a/common/autoconf/lib-std.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/lib-std.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/lib-std.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -86,7 +86,7 @@
    AC_SUBST(LIBCXX)
  
@@ -378,7 +390,7 @@ diff -r a08cbfc0e4ec common/autoconf/lib-std.m4
  ])
 diff -r a08cbfc0e4ec common/autoconf/spec.gmk.in
 --- a/common/autoconf/spec.gmk.in	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/spec.gmk.in	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/spec.gmk.in	Sat Dec 16 14:03:22 2017 +0100
 @@ -122,6 +122,15 @@
    export PATH:=@VS_PATH@
  endif
@@ -453,7 +465,7 @@ diff -r a08cbfc0e4ec common/autoconf/spec.gmk.in
  BOOT_JDK_MODULAR ?= @BOOT_JDK_MODULAR@
 diff -r a08cbfc0e4ec common/autoconf/toolchain.m4
 --- a/common/autoconf/toolchain.m4	Thu Aug 03 18:56:56 2017 +0000
-+++ b/common/autoconf/toolchain.m4	Wed Nov 01 08:51:31 2017 +0100
++++ b/common/autoconf/toolchain.m4	Sat Dec 16 14:03:22 2017 +0100
 @@ -41,7 +41,7 @@
  VALID_TOOLCHAINS_solaris="solstudio"
  VALID_TOOLCHAINS_macosx="gcc clang"
@@ -513,7 +525,7 @@ diff -r a08cbfc0e4ec common/autoconf/toolchain.m4
      if test -n "$OBJCOPY"; then
 diff -r a08cbfc0e4ec make/Images.gmk
 --- a/make/Images.gmk	Thu Aug 03 18:56:56 2017 +0000
-+++ b/make/Images.gmk	Wed Nov 01 08:51:31 2017 +0100
++++ b/make/Images.gmk	Sat Dec 16 14:03:22 2017 +0100
 @@ -188,8 +188,8 @@
  # All variables in this section are assigned with simple =, without :, to enable
  # more selective overriding from the custom version of this file.
@@ -570,7 +582,7 @@ diff -r a08cbfc0e4ec make/Images.gmk
  # src.zip
 diff -r a08cbfc0e4ec make/ZipSource.gmk
 --- a/make/ZipSource.gmk	Thu Aug 03 18:56:56 2017 +0000
-+++ b/make/ZipSource.gmk	Wed Nov 01 08:51:31 2017 +0100
++++ b/make/ZipSource.gmk	Sat Dec 16 14:03:22 2017 +0100
 @@ -84,7 +84,7 @@
  endif
  
@@ -582,7 +594,7 @@ diff -r a08cbfc0e4ec make/ZipSource.gmk
  
 diff -r a08cbfc0e4ec make/common/NativeCompilation.gmk
 --- a/make/common/NativeCompilation.gmk	Thu Aug 03 18:56:56 2017 +0000
-+++ b/make/common/NativeCompilation.gmk	Wed Nov 01 08:51:31 2017 +0100
++++ b/make/common/NativeCompilation.gmk	Sat Dec 16 14:03:22 2017 +0100
 @@ -176,7 +176,7 @@
  # of make targets for dependent files (.d.targets)
  DEPENDENCY_TARGET_SED_PATTERN := \
