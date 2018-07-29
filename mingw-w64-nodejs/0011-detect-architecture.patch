@@ -11,7 +11,7 @@ diff --git a/configure b/configure
 index 5a242a1a..9950626e 100755
 --- a/configure
 +++ b/configure
-@@ -855,7 +855,7 @@ def configure_node(o):
+@@ -900,7 +900,7 @@ def configure_node(o):
    o['variables']['node_install_npm'] = b(not options.without_npm)
    o['default_configuration'] = 'Debug' if options.debug else 'Release'
  

@@ -15,7 +15,7 @@ diff --git a/deps/v8/src/base/format-macros.h b/deps/v8/src/base/format-macros.h
 index 5f5fe5df..13f240a2 100644
 --- a/deps/v8/src/base/format-macros.h
 +++ b/deps/v8/src/base/format-macros.h
-@@ -80,6 +80,16 @@
+@@ -80,6 +80,25 @@
  
  #else  // V8_OS_WIN
  
@@ -25,8 +25,17 @@ index 5f5fe5df..13f240a2 100644
 +#ifndef PRIu64
 +#define PRIu64 "I64u"
 +#endif
++#ifndef PRIi64
++#define PRIi64 "I64i"
++#endif
 +#ifndef PRIx64
 +#define PRIx64 "I64x"
++#endif
++#ifndef PRIX64
++#define PRIX64 "I64X"
++#endif
++#ifndef PRIx32
++#define PRIx32 "I32x"
 +#endif
 +
  #if !defined(PRId64) || !defined(PRIu64) || !defined(PRIx64)

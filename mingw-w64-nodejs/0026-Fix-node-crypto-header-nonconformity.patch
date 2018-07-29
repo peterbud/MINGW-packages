@@ -1,0 +1,31 @@
+--- a/src/node_crypto.h	2018-07-18 14:38:15.000000000 +0200
++++ b/src/node_crypto.h	2018-07-29 07:33:41.865249400 +0200
+@@ -71,6 +71,10 @@
+   ~MarkPopErrorOnReturn() { ERR_pop_to_mark(); }
+ };
+ 
++//#if !defined(EVP_MD_CTX_free)
++//#define EVP_MD_CTX_free(ctx) EVP_MD_CTX_destroy((ctx))
++//#endif
++
+ // Define smart pointers for the most commonly used OpenSSL types:
+ using X509Pointer = DeleteFnPtr<X509, X509_free>;
+ using BIOPointer = DeleteFnPtr<BIO, BIO_free_all>;
+@@ -79,7 +83,7 @@
+ using SSLPointer = DeleteFnPtr<SSL, SSL_free>;
+ using EVPKeyPointer = DeleteFnPtr<EVP_PKEY, EVP_PKEY_free>;
+ using EVPKeyCtxPointer = DeleteFnPtr<EVP_PKEY_CTX, EVP_PKEY_CTX_free>;
+-using EVPMDPointer = DeleteFnPtr<EVP_MD_CTX, EVP_MD_CTX_free>;
++using EVPMDPointer = DeleteFnPtr<EVP_MD_CTX, EVP_MD_CTX_destroy>;
+ using RSAPointer = DeleteFnPtr<RSA, RSA_free>;
+ using BignumPointer = DeleteFnPtr<BIGNUM, BN_free>;
+ using NetscapeSPKIPointer = DeleteFnPtr<NETSCAPE_SPKI, NETSCAPE_SPKI_free>;
+@@ -435,7 +439,7 @@
+   }
+ 
+  private:
+-  DeleteFnPtr<HMAC_CTX, HMAC_CTX_free> ctx_;
++  DeleteFnPtr<HMAC_CTX, HMAC_CTX_cleanup> ctx_;
+ };
+ 
+ class Hash : public BaseObject {

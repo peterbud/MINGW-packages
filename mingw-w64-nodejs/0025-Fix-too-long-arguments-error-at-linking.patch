@@ -1,0 +1,44 @@
+--- a/tools/gyp/pylib/gyp/generator/make.py	2018-07-18 14:38:20.000000000 +0200
++++ b/tools/gyp/pylib/gyp/generator/make.py	2018-07-28 19:37:58.413141600 +0200
+@@ -138,7 +138,7 @@
+ 
+ LINK_COMMANDS_LINUX = """\
+ quiet_cmd_alink = AR($(TOOLSET)) $@
+-cmd_alink = rm -f $@ && $(AR.$(TOOLSET)) crs $@ $(filter %.o,$^)
++cmd_alink = rm -f $@ && $(AR.$(TOOLSET)) crs $@ @$@.in
+ 
+ quiet_cmd_alink_thin = AR($(TOOLSET)) $@
+ cmd_alink_thin = rm -f $@ && $(AR.$(TOOLSET)) crsT $@ $(filter %.o,$^)
+@@ -1694,11 +1694,13 @@
+     if postbuilds:
+       assert ',' not in command
+       suffix = ',,1'  # Tell do_cmd to honor $POSTBUILDS
++
+     self.WriteMakeRule(outputs, inputs,
+                        actions = ['$(call do_cmd,%s%s)' % (command, suffix)],
+                        comment = comment,
+                        command = command,
+                        force = True)
++
+     # Add our outputs to the list of targets we read depfiles from.
+     # all_deps is only used for deps file reading, and for deps files we replace
+     # spaces with ? because escaping doesn't work with make's $(sort) and
+@@ -1760,11 +1762,17 @@
+       self.WriteLn('%s: %s' % ('.INTERMEDIATE', intermediate))
+       self.WriteLn('%s: %s%s' %
+                    (intermediate, ' '.join(inputs), force_append))
++
+       actions.insert(0, '$(call do_cmd,touch)')
+ 
+     if actions:
+       for action in actions:
+-        self.WriteLn('\t%s' % action)
++        if command == 'alink':
++          self.WriteLn('\t$(file >$@.in,$(filter %.o,$^))')
++          self.WriteLn('\t%s' % action)
++          self.WriteLn('\t%s' % '@rm $@.in')
++        else:
++          self.WriteLn('\t%s' % action)
+     self.WriteLn()
+ 
+ 

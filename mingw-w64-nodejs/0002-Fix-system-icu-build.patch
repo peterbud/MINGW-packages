@@ -1,18 +1,7 @@
-From 7bc5feded40409da3a615cacd8593e6d3fedaa0f Mon Sep 17 00:00:00 2001
-From: Alethea Rose <alethea@alethearose.com>
-Date: Tue, 14 Feb 2017 21:43:31 -0500
-Subject: [PATCH 02/23] Fix system-icu build
-
----
- deps/v8/src/v8.gyp | 5 -----
- 1 file changed, 5 deletions(-)
-
-diff --git a/deps/v8/src/v8.gyp b/deps/v8/src/v8.gyp
-index e1d4aea0..05204ef2 100644
---- a/deps/v8/src/v8.gyp
-+++ b/deps/v8/src/v8.gyp
-@@ -1818,11 +1818,6 @@
-             'runtime/runtime-intl.cc',
+--- a/deps/v8/gypfiles/v8.gyp	2018-07-18 14:38:04.000000000 +0200
++++ b/deps/v8/gypfiles/v8.gyp	2018-07-28 08:06:26.705479200 +0200
+@@ -1847,11 +1847,6 @@
+             '../src/runtime/runtime-intl.cc',
            ],
          }],
 -        ['OS=="win" and v8_enable_i18n_support==1', {
@@ -23,6 +12,3 @@ index e1d4aea0..05204ef2 100644
        ],
      },
      {
--- 
-2.17.0.windows.1
-

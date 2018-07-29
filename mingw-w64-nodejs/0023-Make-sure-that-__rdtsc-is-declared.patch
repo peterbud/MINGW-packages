@@ -14,7 +14,7 @@ diff --git a/deps/v8/src/base/platform/time.cc b/deps/v8/src/base/platform/time.
 index dcc13087..2055039c 100644
 --- a/deps/v8/src/base/platform/time.cc
 +++ b/deps/v8/src/base/platform/time.cc
-@@ -695,6 +695,12 @@ void ThreadTicks::WaitUntilInitializedWin() {
+@@ -800,6 +800,12 @@ void ThreadTicks::WaitUntilInitializedWin() {
      ::Sleep(10);
  }
  
