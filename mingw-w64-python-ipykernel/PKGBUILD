@@ -20,6 +20,8 @@ makedepends=("${MINGW_PACKAGE_PREFIX}-python2-setuptools"
              "${MINGW_PACKAGE_PREFIX}-python2-pyzmq"
              "${MINGW_PACKAGE_PREFIX}-python2-jupyter_client"
              "${MINGW_PACKAGE_PREFIX}-python3-jupyter_client"
+             "${MINGW_PACKAGE_PREFIX}-python2-jupyter_core"
+             "${MINGW_PACKAGE_PREFIX}-python3-jupyter_core"
              "${MINGW_PACKAGE_PREFIX}-python2-enum34")
 source=("${_realname}-${pkgver}.tar.gz::https://github.com/ipython/${_realname}/archive/${pkgver}.tar.gz")
 sha256sums=('c4fa19dcdacde4499c85526d8d29fe840efcf9b144c5c7708fc44e329b868c71')
