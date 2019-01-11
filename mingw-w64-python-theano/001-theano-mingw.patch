@@ -1,0 +1,89 @@
+--- a/theano/gof/cmodule.py	2018-09-17 19:05:43.000000000 +0200
++++ python3-build-x86_64/theano/gof/cmodule.py	2019-01-11 10:30:42.463467800 +0100
+@@ -266,6 +266,7 @@
+         The dynamically loaded module (from __import__).
+ 
+     """
++    fullpath = fullpath.replace("\\", "/")
+     if not os.path.isabs(fullpath):
+         raise ValueError('`fullpath` must be an absolute path', fullpath)
+     if suffix is None:
+@@ -314,7 +315,7 @@
+     finally:
+         del sys.path[0]
+ 
+-    assert fullpath.startswith(rval.__file__)
++    assert fullpath.startswith(rval.__file__.replace("\\","/"))
+     return rval
+ 
+ 
+@@ -1179,7 +1180,7 @@
+             try:
+                 location = dlimport_workdir(self.dirname)
+                 module = lnk.compile_cmodule(location)
+-                name = module.__file__
++                name = module.__file__.replace('\\', '/')
+                 assert name.startswith(location)
+                 assert name not in self.module_from_name
+                 self.module_from_name[name] = module
+@@ -1593,7 +1594,9 @@
+     Return the platform-dependent extension for compiled modules.
+ 
+     """
+-    if sys.platform == 'win32':
++    if sys.platform == 'win32' and 'GCC' in sys.version :
++        return 'pyd'
++    if sys.platform == 'win32' and not 'GCC' in sys.version :
+         return 'pyd'
+     elif sys.platform == 'cygwin':
+         return 'dll'
+@@ -1625,6 +1628,8 @@
+ def std_lib_dirs_and_libs():
+     # We cache the results as on Windows, this trigger file access and
+     # this method is called many times.
++    is_mingw = (sys.platform == 'win32' and 'GCC' in sys.version)
++
+     if std_lib_dirs_and_libs.data is not None:
+         return std_lib_dirs_and_libs.data
+     python_inc = distutils.sysconfig.get_python_inc()
+@@ -1633,10 +1638,18 @@
+         # installation directory, in case the user defined a custom
+         # installation directory.
+         python_version = distutils.sysconfig.get_python_version()
+-        libname = 'python' + python_version.replace('.', '')
++        if is_mingw:
++            libname = 'python' + python_version
++        else:
++            libname = 'python' + python_version.replace('.', '')
++        
+         # Also add directory containing the Python library to the library
+         # directories.
+-        python_lib_dirs = [os.path.join(os.path.dirname(python_inc), 'libs')]
++        if is_mingw:
++            python_lib_dirs = [os.path.join(os.path.dirname(os.path.dirname(python_inc)), 'lib')]
++        else:
++            python_lib_dirs = [os.path.join(os.path.dirname(python_inc), 'libs')]
++
+         if "Canopy" in python_lib_dirs[0]:
+             # Canopy stores libpython27.a and libmsccr90.a in this directory.
+             # For some reason, these files are needed when compiling Python
+--- a/theano/configdefaults.py	2018-09-17 19:05:43.000000000 +0200
++++ btheano/configdefaults.py	2019-01-11 11:48:06.277981100 +0100
+@@ -1277,7 +1277,7 @@
+     global numpy
+     warn_record = []
+     try:
+-        if (hasattr(np.distutils, '__config__') and
++        if 0 and (hasattr(np.distutils, '__config__') and
+                 np.distutils.__config__):
+             # If the old private interface is available use it as it
+             # don't print information to the user.
+@@ -1900,7 +1900,7 @@
+ # On Windows we should avoid writing temporary files to a directory that is
+ # part of the roaming part of the user profile. Instead we use the local part
+ # of the user profile, when available.
+-if sys.platform == 'win32' and os.getenv('LOCALAPPDATA') is not None:
++if sys.platform == 'win32' and os.getenv('LOCALAPPDATA') is not None and not 'GCC' in sys.version:
+     default_base_compiledir = os.path.join(os.getenv('LOCALAPPDATA'), 'Theano')
+ else:
+     default_base_compiledir = os.path.join(get_home_dir(), '.theano')
