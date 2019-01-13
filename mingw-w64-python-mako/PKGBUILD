@@ -5,7 +5,7 @@ _realname=mako
 pkgbase=mingw-w64-python-${_realname}
 pkgname=("${MINGW_PACKAGE_PREFIX}-python2-${_realname}" "${MINGW_PACKAGE_PREFIX}-python3-${_realname}")
 pkgver=1.0.7
-pkgrel=3
+pkgrel=4
 pkgdesc="A super-fast templating language that borrows the best ideas from the existing templating languages (mingw-w64)"
 arch=('any')
 license=('custom')
@@ -19,11 +19,18 @@ makedepends=("${MINGW_PACKAGE_PREFIX}-python2-setuptools"
 checkdepends=("${MINGW_PACKAGE_PREFIX}-python2-nose"
               "${MINGW_PACKAGE_PREFIX}-python3-nose")
 options=('staticlibs')
-source=("https://pypi.org/packages/source/M/Mako/Mako-${pkgver}.tar.gz")
-sha256sums=('4e02fde57bd4abb5ec400181e4c314f56ac3e49ba4fb8b0d50bba18cb27d25ae')
+source=("https://pypi.org/packages/source/M/Mako/Mako-${pkgver}.tar.gz"
+        "001-python-mako-fix-tests.patch")
+sha256sums=('4e02fde57bd4abb5ec400181e4c314f56ac3e49ba4fb8b0d50bba18cb27d25ae'
+            'c185026068b40fac95baf30338f276451929cba66bb82cfbbbf5757a4c1c5b2a')
 
 prepare() {
+
+  cd "${srcdir}/${_realname}-${pkgver}"
+  patch -p1 -i ${srcdir}/"001-python-mako-fix-tests.patch"
+
   cd ${srcdir}
+
   for pver in {2,3}; do 
     rm -rf python${pver}-build-${CARCH} | true
     cp -r "${_realname}-${pkgver}" "python${pver}-build-${CARCH}"

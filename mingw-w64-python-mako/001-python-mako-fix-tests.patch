@@ -1,0 +1,50 @@
+--- a/test/test_template.py	2017-07-13 18:12:05.000000000 +0200
++++ b/test/test_template.py	2019-01-13 13:13:29.289306000 +0100
+@@ -1103,12 +1103,12 @@
+         t2 = self._file_template('subdir/modtest.html')
+ 
+         eq_(
+-            t.module.__file__,
+-            os.path.join(module_base, 'modtest.html.py')
++            t.module.__file__.lower(),
++            os.path.join(module_base.lower(), 'modtest.html.py').replace("\\", os.sep)
+         )
+         eq_(
+-            t2.module.__file__,
+-            os.path.join(module_base, 'subdir', 'modtest.html.py')
++            t2.module.__file__.lower(),
++            os.path.join(module_base.lower(), 'subdir', 'modtest.html.py').replace("\\", os.sep)
+         )
+ 
+     def test_callable(self):
+@@ -1143,9 +1143,9 @@
+         t = lookup.get_template('/modtest.html')
+         t2 = lookup.get_template('/subdir/modtest.html')
+         eq_(
+-            canary,
+-            [os.path.join(module_base, "modtest.html.py"),
+-            os.path.join(module_base, "subdir", "modtest.html.py")]
++            list(map(lambda x: x.lower(), canary)),
++            [os.path.join(module_base, "modtest.html.py").lower().replace("\\", os.sep),
++            os.path.join(module_base, "subdir", "modtest.html.py").lower().replace("\\", os.sep)]
+         )
+ 
+ class FilenameToURITest(TemplateTest):
+@@ -1166,7 +1166,7 @@
+                                     module_directory="c:\\modules\\")
+ 
+             eq_(t1.uri, "/foo/template.html")
+-            eq_(t1.path, "c:\\modules\\foo\\template.html.py")
++            eq_(t1.path.lower(), "c:\\modules\\foo\\template.html.py".replace("\\", os.sep))
+ 
+             t1 = NoCompileTemplate(
+                                     filename="c:\\path\\to\\templates\\template.html",
+@@ -1174,7 +1174,7 @@
+                                     module_directory="c:\\modules\\")
+ 
+             eq_(t1.uri, "/bar/template.html")
+-            eq_(t1.path, "c:\\modules\\bar\\template.html.py")
++            eq_(t1.path.lower(), "c:\\modules\\bar\\template.html.py".replace("\\", os.sep))
+ 
+         finally:
+             os.path = current_path
