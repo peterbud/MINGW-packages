@@ -1,0 +1,82 @@
+diff --git a/src/loaders/dyn_load.c b/src/loaders/dyn_load.c
+index 08442ed..03c5eeb 100644
+--- a/src/loaders/dyn_load.c
++++ b/src/loaders/dyn_load.c
+@@ -1,5 +1,6 @@
+ #include "dyn_load.h"
+ #include "util/error.h"
++#include <stdio.h>
+ 
+ #if defined(__unix__) || defined(__APPLE__)
+ 
+@@ -42,8 +43,11 @@ static inline void error_win(const char* name, error *e) {
+ 
+ void *ga_load_library(const char *name, error *e) {
+   void *res = LoadLibrary(name);
+-  if (res == NULL)
++  if (res == NULL){
+     error_win(name, e);
++    printf("Error loading library %s, %s\n",name, e->msg);
++    fflush(stdout);
++  }
+   return res;
+ }
+ 
+diff --git a/src/loaders/libclblast.c b/src/loaders/libclblast.c
+index 759b9cd..dc1addb 100644
+--- a/src/loaders/libclblast.c
++++ b/src/loaders/libclblast.c
+@@ -5,7 +5,11 @@
+ #include "gpuarray/error.h"
+ 
+ #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
++#if defined(__MINGW32__)
++static const char libname[] = "libclblast.dll";
++#else
+ static const char libname[] = "clblast.dll";
++#endif
+ #else /* Unix */
+ #ifdef __APPLE__
+ static const char libname[] = "libclblast.dylib";
+diff --git a/src/loaders/libopencl.c b/src/loaders/libopencl.c
+index 7c38abe..e0bace0 100644
+--- a/src/loaders/libopencl.c
++++ b/src/loaders/libopencl.c
+@@ -3,9 +3,14 @@
+ #include "libopencl.h"
+ #include "dyn_load.h"
+ #include "gpuarray/error.h"
++#include <stdio.h>
+ 
+ #if defined(WIN32) || defined(_WIN32) || defined(WIN64) || defined(_WIN64)
++#if defined(__MINGW32__)
++static char libname[] = "libOpenCL.dll";
++#else
+ static char libname[] = "OpenCL.dll";
++#endif
+ #else /* Unix */
+ #ifdef __APPLE__
+ static char libname[] = "/System/Library/Frameworks/OpenCL.framework/OpenCL";
+@@ -34,6 +39,8 @@ int load_libopencl(error *e) {
+   if (loaded)
+     return GA_NO_ERROR;
+ 
++  printf("Open OPENCL lib: %s\n", libname);
++  fflush(stdout);
+   lib = ga_load_library(libname, e);
+   if (lib == NULL)
+     return e->code;
+diff --git a/tests/check_types.c b/tests/check_types.c
+index d13fc88..6774b18 100644
+--- a/tests/check_types.c
++++ b/tests/check_types.c
+@@ -75,8 +75,8 @@ END_TEST
+ Suite *get_suite(void) {
+   Suite *s = suite_create("types");
+   TCase *tc = tcase_create("All");
+-  tcase_add_test(tc, test_register_type);
+   tcase_add_test(tc, test_get_type);
++  tcase_add_test(tc, test_register_type);
+   tcase_add_test(tc, test_get_elsize);
+   suite_add_tcase(s, tc);
+   return s;

@@ -1,0 +1,135 @@
+# Maintainer: Peter Budai <peterbudai at hotmail dot com>
+
+_realname=libgpuarray
+_pyname=pygpu
+pkgbase=mingw-w64-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}"
+        "${MINGW_PACKAGE_PREFIX}-python2-${_pyname}"
+        "${MINGW_PACKAGE_PREFIX}-python3-${_pyname}")
+pkgver=0.7.6
+pkgrel=1
+pkgdesc="Library to manipulate tensors on the GPU. (mingw-w64)"
+arch=('any')
+url='https://github.com/Theano/libgpuarray'
+license=('custom')
+makedepends=( "${MINGW_PACKAGE_PREFIX}-cmake"
+              "${MINGW_PACKAGE_PREFIX}-python2"
+              "${MINGW_PACKAGE_PREFIX}-python3"
+              "${MINGW_PACKAGE_PREFIX}-python2-setuptools"
+              "${MINGW_PACKAGE_PREFIX}-python3-setuptools"
+              "${MINGW_PACKAGE_PREFIX}-cython")
+checkdepends=("${MINGW_PACKAGE_PREFIX}-check")
+options=('strip' 'staticlibs')
+source=("${_realname}-${pkgver}.tar.gz"::"https://github.com/Theano/${_realname}/archive/v${pkgver}.tar.gz"
+    001-gpuarray-mingw.patch)
+sha256sums=('ad1c00dd47c3d36ee1708e5167377edbfcdb7226e837ef9c68b841afbb4a4f6a'
+            '5d3f9b9acef25139d3e363f7b355211c61ec01232a19ecf67d10fe91f2bb74ac')
+
+
+prepare() {
+  cd "${_realname}-${pkgver}" 
+  patch -Np1 -i ${srcdir}/001-gpuarray-mingw.patch
+
+  cd "${srcdir}"
+  for pver in {2,3}; do
+    rm -rf python${pver}-build-${CARCH} | true
+    cp -r "${_realname}-${pkgver}" "python${pver}-build-${CARCH}"
+  done
+
+}
+
+build() {
+
+  declare -a extra_config
+  if check_option "debug" "n"; then
+    extra_config+=("-DCMAKE_BUILD_TYPE=Release")
+  else
+    extra_config+=("-DCMAKE_BUILD_TYPE=Debug")
+  fi
+
+  cd "${srcdir}/${_realname}-${pkgver}"
+  MSYS2_ARG_CONV_EXCL="-DCMAKE_INSTALL_PREFIX=" \
+    ${MINGW_PREFIX}/bin/cmake \
+      -G'MSYS Makefiles' \
+      -DCMAKE_INSTALL_PREFIX=${MINGW_PREFIX} \
+      "${extra_config[@]}" \
+      -DBUILD_SHARED_LIBS=ON \
+      .
+
+  make
+
+  for pver in {2,3}; do
+    msg "Python ${pver} build for ${CARCH}"
+    cd "${srcdir}/python${pver}-build-${CARCH}"
+
+    # Python setup script needs the built libraries in place
+    ${MINGW_PREFIX}/bin/cmake \
+      -G'MSYS Makefiles' \
+      "${extra_config[@]}" \
+      -DBUILD_SHARED_LIBS=ON \
+      .
+    make
+
+    MSYS2_ARG_CONV_EXCL="--prefix=;--install-scripts=;--install-platlib=" \
+    ${MINGW_PREFIX}/bin/python${pver} setup.py build
+  done
+}
+
+
+check() {
+  cd "${srcdir}/${_realname}-${pkgver}"
+  #make test
+}
+
+package_libgpuarray() {
+  depends=("${MINGW_PACKAGE_PREFIX}-clblast")
+
+  cd "${srcdir}/${_realname}-${pkgver}"
+  make install DESTDIR="${pkgdir}"
+}
+
+package_python2-pygpu() {
+  depends=("${MINGW_PACKAGE_PREFIX}-${_realname}"
+              "${MINGW_PACKAGE_PREFIX}-python2")
+
+  cd "${srcdir}/python2-build-${CARCH}"
+
+  MSYS2_ARG_CONV_EXCL="--prefix=;--install-scripts=;--install-platlib=" \
+  ${MINGW_PREFIX}/bin/python2 setup.py install --root=${pkgdir} --prefix=${MINGW_PREFIX} --optimize=1
+}
+
+package_python3-pygpu() {
+  depends=("${MINGW_PACKAGE_PREFIX}-${_realname}"
+              "${MINGW_PACKAGE_PREFIX}-python3")
+
+  cd "${srcdir}/python3-build-${CARCH}"
+
+  MSYS2_ARG_CONV_EXCL="--prefix=;--install-scripts=;--install-platlib=" \
+  ${MINGW_PREFIX}/bin/python3 setup.py install --root=${pkgdir} --prefix=${MINGW_PREFIX} --optimize=1
+
+  install -Dm644 ${srcdir}/${_realname}-${pkgver}/LICENSE ${pkgdir}${MINGW_PREFIX}/share/licenses/${_realname}/LICENSE
+}
+
+package_mingw-w64-i686-libgpuarray() {
+  package_libgpuarray
+}
+
+package_mingw-w64-x86_64-libgpuarray() {
+  package_libgpuarray
+}
+
+package_mingw-w64-i686-python2-pygpu() {
+  package_python2-pygpu
+}
+
+package_mingw-w64-x86_64-python2-pygpu() {
+  package_python2-pygpu
+}
+
+package_mingw-w64-i686-python3-pygpu() {
+  package_python3-pygpu
+}
+
+package_mingw-w64-x86_64-python3-pygpu() {
+  package_python3-pygpu
+}
