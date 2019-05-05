@@ -1,0 +1,74 @@
+# Maintainer: Peter Budai <peterbudai@hotmail.com>
+
+_realname=tornado
+pkgbase=mingw-w64-python-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-python2-${_realname}")
+pkgver=5.1.1
+pkgrel=2
+pkgdesc="open source version of the scalable, non-blocking web server and tools (mingw-w64)"
+arch=('any')
+url='http://www.tornadoweb.org/'
+license=('Apache')
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-python2"
+  "${MINGW_PACKAGE_PREFIX}-python2-futures"
+  "${MINGW_PACKAGE_PREFIX}-python2-backports-abc"
+  "${MINGW_PACKAGE_PREFIX}-python2-setuptools"
+  "${MINGW_PACKAGE_PREFIX}-python2-singledispatch"
+  )
+source=("${_realname}-${pkgver}.tar.gz::https://github.com/tornadoweb/tornado/archive/v${pkgver}.tar.gz")
+sha256sums=('a1da335a2978b9a8c3544cab10076d799442d7988ed0b4f2be035fe4388ca8dd')
+
+noextract=("${_realname}-${pkgver}.tar.gz")
+
+prepare() {
+  # work around an issue with symbolic links in the tarball.
+  bsdtar zxf ${_realname}-${pkgver}.tar.gz || true
+
+  # python -> python2 rename
+  find ${_realname}-${pkgver} -name '*py' -exec sed -e 's_#!/usr/bin/env python_&2_' -i {} \;
+
+  export TORNADO_EXTENSION=1
+}
+
+build() {
+  cd "${srcdir}/${_realname}-${pkgver}"
+  ${MINGW_PREFIX}/bin/python2 setup.py build
+}
+
+check() {
+
+  (
+    cd "${srcdir}/${_realname}-${pkgver}"
+    python2 setup.py install --root="$PWD/tmp_install" --optimize=1
+    export PYTHONPATH="$PWD/tmp_install/usr/lib/python2.7/site-packages:$PYTHONPATH"
+    cd tmp_install
+    python2 -m tornado.test.runtests
+    python2 -m tornado.test.runtests --ioloop=tornado.platform.select.SelectIOLoop
+    python2 -m tornado.test.runtests --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient
+    python2 -m tornado.test.runtests --ioloop_time_monotonic
+    python2 -m tornado.test.runtests --ioloop=tornado.platform.twisted.TwistedIOLoop
+    python2 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
+    python2 -m tornado.test.runtests --resolver=tornado.netutil.ThreadedResolver
+  ) || warning "Tests failed"
+
+}
+
+package_python2-tornado() {
+  cd "${srcdir}/${_realname}-${pkgver}"
+  MSYS2_ARG_CONV_EXCL="--prefix=;--install-scripts=;--install-platlib=" \
+  ${MINGW_PREFIX}/bin/python2 setup.py install --prefix=${MINGW_PREFIX} \
+    --root="${pkgdir}" --optimize=1 --skip-build
+}
+
+package_mingw-w64-i686-python2-tornado() {
+  package_python2-tornado
+}
+
+package_mingw-w64-x86_64-python2-tornado() {
+  package_python2-tornado
+}
+
+package_mingw-w64-x86_64-python3-tornado() {
+  package_python3-tornado
+}

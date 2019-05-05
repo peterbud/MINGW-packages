@@ -1,0 +1,66 @@
+# Maintainer: Peter Budai <peterbudai@hotmail.com>
+
+_realname=tornado
+pkgbase=mingw-w64-python-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-python3-${_realname}")
+pkgver=6.0.2
+pkgrel=1
+pkgdesc="open source version of the scalable, non-blocking web server and tools (mingw-w64)"
+arch=('any')
+url='http://www.tornadoweb.org/'
+license=('Apache')
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-python3"
+  "${MINGW_PACKAGE_PREFIX}-python3-setuptools"
+  )
+
+source=("${_realname}-${pkgver}.tar.gz::https://github.com/tornadoweb/tornado/archive/v${pkgver}.tar.gz")
+sha256sums=('a5f744b5516d8a94171db5e02096dbd5169a5df2034a2b562a150b53b6d4db70')
+
+noextract=("${_realname}-${pkgver}.tar.gz")
+
+prepare() {
+  # work around an issue with symbolic links in the tarball.
+  bsdtar zxf ${_realname}-${pkgver}.tar.gz || true
+  export TORNADO_EXTENSION=1
+}
+
+build() {
+  cd "${srcdir}/${_realname}-${pkgver}"
+  ${MINGW_PREFIX}/bin/python3 setup.py build
+}
+
+check() {
+
+  (
+    cd "${srcdir}/${_realname}-${pkgver}"
+    python3 setup.py install --root="$PWD/tmp_install" --optimize=1
+    export PYTHONPATH="$PWD/tmp_install/usr/lib/python3.7/site-packages:$PYTHONPATH"
+    cd tmp_install
+    python3 -m tornado.test.runtests
+    python3 -m tornado.test.runtests --ioloop=tornado.platform.select.SelectIOLoop
+    python3 -m tornado.test.runtests --httpclient=tornado.curl_httpclient.CurlAsyncHTTPClient
+    python3 -m tornado.test.runtests --ioloop_time_monotonic
+    python3 -m tornado.test.runtests --ioloop=tornado.platform.twisted.TwistedIOLoop
+    python3 -m tornado.test.runtests --ioloop=tornado.platform.asyncio.AsyncIOLoop
+    python3 -m tornado.test.runtests --resolver=tornado.netutil.ThreadedResolver
+  ) || warning "Tests failed"
+
+}
+
+package_python3-tornado() {
+
+  cd "${srcdir}/${_realname}-${pkgver}"
+  MSYS2_ARG_CONV_EXCL="--prefix=;--install-scripts=;--install-platlib=" \
+  ${MINGW_PREFIX}/bin/python3 setup.py install --prefix=${MINGW_PREFIX} \
+    --root="${pkgdir}" --optimize=1 --skip-build
+}
+
+
+package_mingw-w64-i686-python3-tornado() {
+  package_python3-tornado
+}
+
+package_mingw-w64-x86_64-python3-tornado() {
+  package_python3-tornado
+}
