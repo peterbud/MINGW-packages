@@ -3,8 +3,8 @@
 _realname=nbconvert
 pkgbase=mingw-w64-python-${_realname}
 pkgname=("${MINGW_PACKAGE_PREFIX}-python3-jupyter-${_realname}")
-pkgver=5.4
-pkgrel=3
+pkgver=5.5
+pkgrel=1
 pkgdesc="Convert Jupyter notebooks to other formats (mingw-w64)"
 arch=('any')
 url='https://pypi.python.org/pypi/nbconvert'
@@ -25,7 +25,7 @@ depends=("${MINGW_PACKAGE_PREFIX}-python3"
 install=${_realname}3-${CARCH}.install
 makedepends=("${MINGW_PACKAGE_PREFIX}-python3-setuptools")
 source=("${_realname}-${pkgver}.tar.gz::https://github.com/jupyter/${_realname}/archive/${pkgver}.tar.gz")
-sha256sums=('7fc506624b9715a607abc7cc189b9d70fe73a483974a42a389f8188d1a8e3d0c')
+sha256sums=('f37d0921cbe4fc94f5d6dc7910d77d3b3652598de477fd43afc9e82dc5df7d51')
 
 prepare() {
   rm -rf python3-build-${CARCH} | true
@@ -41,9 +41,7 @@ build() {
 check() {
   msg "Python 3 test for ${CARCH}"
   cd "${srcdir}/python3-build-${CARCH}"
-#Todo: Fix a test and possibly nbconvert.  The problem is that it attempts
-#to use inkscape but it locates it using the Windows registry and the MINGW
-#version from these doesn't set the registry.
+  # 1 failed, 220 passed, 30 skipped, 82 warnings
   ${MINGW_PREFIX}/bin/py.test --pyargs nbconvert || true
 }
 
