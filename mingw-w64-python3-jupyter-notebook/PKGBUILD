@@ -8,7 +8,7 @@
 _realname=notebook
 pkgbase=mingw-w64-python-${_realname}
 pkgname=("${MINGW_PACKAGE_PREFIX}-python3-${_realname}")
-pkgver=5.7.4
+pkgver=5.7.8
 pkgrel=1
 pkgdesc="The language-agnostic HTML notebook application for Project Jupyter"
 arch=('any')
@@ -38,18 +38,22 @@ makedepends=("${MINGW_PACKAGE_PREFIX}-python3-setuptools"
 
 source=("$pkgname-$pkgver.tgz::https://github.com/jupyter/notebook/archive/$pkgver.tar.gz"
         "001-jupyter-notebook-MINGW.patch")
-sha256sums=('c26c67ee16a64b6d2444884b73c399d8020f598f833f4165864e31f28d1c410e'
+sha256sums=('b4691f40924eca3c9dabf0bf6b1884aef76aa7e380f4c37781cf18b3a2f72702'
             '0362ef7944792188d8202bdedd7b51b9a0a06867ea43f480bf8318b163d3b616')
 
 prepare(){
   cd "$srcdir/${_realname}-$pkgver"
   patch -p1 -i ${srcdir}/001-jupyter-notebook-MINGW.patch
+
+  # Clean the cache before proceeding
+  npm cache clean --force
 }
 
 build() {
 
   cd "$srcdir/${_realname}-$pkgver"
 
+  # needs node, downloads a lot of stuff, takes long time, be patient
   ${MINGW_PREFIX}/bin/python3 setup.py build
 }
 
