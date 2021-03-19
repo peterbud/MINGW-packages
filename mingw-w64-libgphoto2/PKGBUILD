@@ -20,9 +20,11 @@ makedepends=("${MINGW_PACKAGE_PREFIX}-gcc"
              "${MINGW_PACKAGE_PREFIX}-doxygen")
 source=(https://sourceforge.net/projects/gphoto/files/libgphoto/${pkgver}/${_realname}-${pkgver}.tar.gz
         libgphoto2-gp_system_filename-fix.patch
+        libgphoto2-fix-winsock-search.patch
         libgphoto2-fix-lumix.patch)
 sha256sums=('fd48f6f58259ba199e834010aca0af3672ca0223ed0a98ba89ec693a415f242a'
-            '27c558cdf88bee6ce1f3f564d6dfbc0b78809c33b98d20c9e58e40e335d7b0dd'
+            'd3fba84c94f721666ebfa5839da868ab7a6f81d0330c18895dde4d433c3161df'
+            'c9b6b4ec89caaf61129edb0cdb8398b0a869e41058876a3e41ac616fd1dab00a'
             '08b6d5b56d01daae60afa4f0b924ddff2c6d5ef2a5bf6057c601f1efb7019016')
 validpgpkeys=('7C4AFD61D8AAE7570796A5172209D6902F969C95') # Marcus Meissner 
 
@@ -30,6 +32,7 @@ prepare() {
   cd "${srcdir}/${_realname}-${pkgver}"
   patch -Np1 -i "${srcdir}/libgphoto2-gp_system_filename-fix.patch"
   patch -Np1 -i "${srcdir}/libgphoto2-fix-lumix.patch"
+  patch -Np1 -i "${srcdir}/libgphoto2-fix-winsock-search.patch"
   autoreconf -fiv
 }
 
